@@ -1,25 +1,38 @@
-import streamlit as st
-from dotenv import load_dotenv
+import logging
 import os
-from htmlTemplates import css, bot_template, user_template
-import langchain
-from langchain.document_loaders import GitLoader
-from langchain.text_splitter import (
-    RecursiveCharacterTextSplitter,
-    Language,
-)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import DeepLake
-from langchain.chat_models import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
+import pathlib
 import tempfile
+
+import langchain
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from langchain.chains import ConversationalRetrievalChain
+from langchain.memory import ConversationBufferMemory
 from langchain.prompts.chat import (
     ChatPromptTemplate,
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
+from langchain.text_splitter import RecursiveCharacterTextSplitter, Language
+from langchain_community.document_loaders import GitLoader
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
+
+load_dotenv()
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
+chroma_local_path = pathlib.Path.cwd() / 'chroma'
+gpt_model = 'gpt-3.5-turbo'
+github_url = os.environ['GITHUB_URL']
 
 
 def load_github_repo(github_url, local_path, repo_branch):
@@ -40,7 +53,7 @@ def split_documents(documents_list):
             ext = os.path.splitext(doc.metadata["source"])[1]
             lang = get_language_from_extension(ext)
             splitter = RecursiveCharacterTextSplitter.from_language(
-                language=lang, chunk_size=1000, chunk_overlap=0
+                language=lang, chunk_size=512, chunk_overlap=0
             )
             split_docs = splitter.create_documents([doc.page_content])
             for split_doc in split_docs:
@@ -51,9 +64,9 @@ def split_documents(documents_list):
                     split_doc
                 )  # Store split documents in a list
 
-        except Exception as e:
-            st.write(
-                f"Error splitting document: {doc.metadata['source']}, Exception: {str(e)}"
+        except Exception:
+            logger.exception(
+                f"Error splitting document: {doc.metadata['source']}"
             )
     return split_documents_list
 
@@ -88,24 +101,24 @@ def get_language_from_extension(ext):
     return ext_to_lang.get(ext, Language.MARKDOWN)
 
 
-def create_vectorstore(chunks, dataset_path):
-    embeddings = OpenAIEmbeddings(disallowed_special=())
-    db = DeepLake(dataset_path=dataset_path, embedding_function=embeddings)
+def create_vectorstore(chunks):
+    db = Chroma(
+        embedding_function=OpenAIEmbeddings(disallowed_special=()),
+        persist_directory=str(chroma_local_path)
+    )
     db.add_documents(chunks)
     return db
 
 
-def load_vectorstore(dataset_path):
-    embeddings = OpenAIEmbeddings(disallowed_special=())
-    db = DeepLake(
-        dataset_path=dataset_path,
-        read_only=True,
-        embedding_function=embeddings,
+def load_vectorstore():
+    db = Chroma(
+        embedding_function=OpenAIEmbeddings(disallowed_special=()),
+        persist_directory=str(chroma_local_path)
     )
     return db
 
 
-def get_conversation_chain(vectorstore, gpt_model):
+def get_conversation_chain(vectorstore, gpt_model="gpt-3.5-turbo"):
     langchain.verbose = False
     llm = ChatOpenAI(model=gpt_model, temperature=0.5)
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
@@ -138,6 +151,8 @@ def get_conversation_chain(vectorstore, gpt_model):
     qa_prompt = ChatPromptTemplate.from_messages(
         [system_message_prompt, user_message_prompt]
     )
+
+    print("system prompt", system_message_prompt)
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
@@ -147,86 +162,38 @@ def get_conversation_chain(vectorstore, gpt_model):
     return conversation_chain
 
 
-def handle_user_input(user_input):
-    response = st.session_state.conversation({"question": user_input})
-    st.session_state.chat_history = response["chat_history"]
-
-    for i, message in enumerate(st.session_state.chat_history):
-        if i % 2 == 0:
-            st.write(
-                user_template.replace("{{MSG}}", message.content),
-                unsafe_allow_html=True,
-            )
-        else:
-            st.write(
-                bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True
-            )
+class Query(BaseModel):
+    user_input: str
 
 
-def main():
-    load_dotenv()
-    st.set_page_config(page_title="Chat with repo")
-    st.write(css, unsafe_allow_html=True)
+app = FastAPI()
 
-    with st.sidebar:
-        """
-        Remember to add your `OPENAI_API_KEY` and `ACTIVELOOP_TOKEN` to your .env file.
-        """
-        gpt_model = st.selectbox("Select OpenAI GPT model", ("gpt-3.5-turbo", "gpt-4"))
 
-        st.subheader("If you don't have an existing Activeloop dataset enter below")
-        github_url = st.text_input(
-            "Enter GitHub repo URL (for example: `https://github.com/username/my_repo`)"
-        )
-        repo_branch = st.text_input(
-            "Enter GitHub repo branch (for example: `master`)", "master"
-        )
-        activeloop_url = st.text_input(
-            "Enter the Activeloop dataset URL where you wish to save your dataset (for example: `hub://username/my_dataset`)"
-        )
+def collection_exists():
+    client = Chroma(
+        embedding_function=OpenAIEmbeddings(disallowed_special=()),
+        persist_directory=str(chroma_local_path)
+    )
 
-        if st.button("Create dataset and start chatting"):
-            with st.spinner("Processing..."):
-                with tempfile.TemporaryDirectory() as local_path:
-                    # get code files
-                    docs = load_github_repo(
-                        github_url, local_path, repo_branch="master"
-                    )
-                    # get code chunks
-                    chunks = split_documents(docs)
-                    # create vector store
-                    vectorstore = create_vectorstore(chunks, activeloop_url)
-                    # create conversation chain
-                    st.session_state.conversation = get_conversation_chain(
-                        vectorstore, gpt_model
-                    )
+    return client._collection.count() > 1
 
-        st.subheader("If you already have an existing Activeloop dataset enter below")
 
-        activeloop_url = st.text_input(
-            "Enter your existing Activeloop dataset URL here (for  example: `hub://username/my_dataset`)"
-        )
-
-        if st.button("Load dataset and start chatting"):
-            with st.spinner("Processing..."):
-                # load vector store
-                vectorstore = load_vectorstore(activeloop_url)
-                # create conversation chain
-                st.session_state.conversation = get_conversation_chain(
-                    vectorstore, gpt_model
+@app.post("/query/")
+async def query(query: Query):
+    try:
+        if not collection_exists():  # db does not exist
+            with tempfile.TemporaryDirectory() as local_path:
+                docs = load_github_repo(
+                    github_url, local_path, repo_branch="main"
                 )
+                chunks = split_documents(docs)
+                db = create_vectorstore(chunks)
+                db.persist()
 
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = None
-
-    # Error handling?
-    st.header("Chat with repo")
-    user_input = st.text_area("Ask question to repo")
-    if user_input:
-        handle_user_input(user_input)
-
-
-if __name__ == "__main__":
-    main()
+        vectorstore = load_vectorstore()
+        convo_chain = get_conversation_chain(vectorstore, gpt_model=gpt_model)
+        response = convo_chain({"question": query.user_input})
+        return response
+    except Exception:
+        logger.exception('Failed to fulfill request because:')
+        raise HTTPException(status_code=500, detail="An error occurred while processing the query")

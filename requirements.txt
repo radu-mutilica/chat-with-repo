@@ -1,0 +1,10 @@
+langchain-chroma
+langchain-community
+langchain~=0.2.1
+python-dotenv~=1.0.1
+openai
+tiktoken
+langchain-openai
+uvicorn
+fastapi~=0.111.0
+pydantic~=2.7.1
