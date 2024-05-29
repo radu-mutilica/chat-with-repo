@@ -8,3 +8,5 @@ langchain-openai
 uvicorn
 fastapi~=0.111.0
 pydantic~=2.7.1
+httpx~=0.27.0
+directory-structure
