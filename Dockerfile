@@ -1,5 +1,5 @@
-ARG PYTHON_VERSION=3.11
-FROM python:${PYTHON_VERSION}-slim as base
+FROM ubuntu:latest
+
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -20,7 +20,7 @@ RUN adduser \
     appuser
 
 
-RUN apt update -y && apt install -y gcc clang clang-tools cmake python3 git g++-11 gcc-11
+RUN apt update && apt install -y gcc clang clang-tools cmake python3 git g++-11 gcc-11
 
 RUN CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
