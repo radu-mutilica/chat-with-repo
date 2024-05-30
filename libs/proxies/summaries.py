@@ -51,7 +51,10 @@ class SummarizeFile(SummaryTask):
     description, as well as the repository's file structure, to aid you with context.
     
     Your job is to produce a short description of what you believe the code in this file achieves.
-    Keep it to 1-2 sentences maximum. 
+    Keep it to 1-2 sentences maximum. Use present tense and try to be as concise as possible. 
+    
+    A good example of a summary is:
+    "FastAPI's endpoints declaration for the LLM server"
     """
 
     user_prompt = """The repository is called '{repo_name}'.
@@ -69,8 +72,8 @@ class SummarizeFile(SummaryTask):
     {content}
     ```
     
-    Produce a short summary of the contents of the above file, in context of the rest of the 
-    repository.
+    Produce a short 1 sentence summary of the contents of the above file, in context of the rest 
+    of the repository.
     """
 
 
@@ -80,6 +83,14 @@ class SummarizeSnippet(SummaryTask):
     summarizing this snippet, you will be given the immediate code context it is present in, the 
     description of the file it is found in, as well as the the general description of the repository
     it is contained in.
+    
+    A good example of a summary is: 
+    "Initialize OpenAI and other custom proxies API credentials" 
+    
+    or
+    
+    "Introduction section of the 'vision' repository's README file. Overview of the 
+    repository's purpose related to Bittensor and decentralized subnet inference."
     """
 
     user_prompt = """The repository is called '{repo_name}'.
@@ -100,7 +111,7 @@ class SummarizeSnippet(SummaryTask):
     {content}
     ```
     
-    Provide a short, condensed 1-2 sentence summary of what you believe the snippet does.
+    Provide a short, condensed 1 sentence summary of what you believe the snippet does.
     """
 
 

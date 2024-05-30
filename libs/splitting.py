@@ -13,6 +13,13 @@ from libs.proxies import summaries
 splitters = {}
 contextual_window_snippet_radius = 2
 
+enriched_snippet_fmt = """
+# {file_path}
+# {file_summary}
+# {snippet_summary}
+
+{content}
+"""
 
 def prepare_splitter(language: Language) -> TextSplitter:
     global splitters
@@ -61,6 +68,13 @@ async def split_document(document, repo, client) -> List[Document]:
                 content=snippet.page_content),
             client=client
         )
+        snippet.metadata['original_page_content'] = snippet.page_content
+        snippet.page_content = enriched_snippet_fmt.format(
+            file_summary=snippet.metadata['file_summary'].replace('\n', ' '),
+            snippet_summary=snippet.metadata['snippet_summary'].replace('\n', ' '),
+            content=snippet.metadata['original_page_content'],
+            file_path=snippet.metadata['file_path']
+        )
 
     return document_snippets
 
@@ -73,7 +87,7 @@ async def split_documents(
     snippets = []
 
     tasks = [
-        split_document(document, repo, client) for document in documents[:4]
+        split_document(document, repo, client) for document in documents
     ]
 
     for task in asyncio.as_completed(tasks):

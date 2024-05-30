@@ -5,7 +5,7 @@ from typing import List
 import httpx
 import langchain
 from directory_structure import Tree
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts.chat import (
@@ -13,6 +13,8 @@ from langchain.prompts.chat import (
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain_community.document_compressors import FlashrankRerank
 from langchain_community.document_loaders import GitLoader
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
@@ -40,24 +42,31 @@ def load_repo(url: str, temp_path: str, branch='main') -> Repo:
     return repo
 
 
+from langchain.retrievers.document_compressors import FlashrankRerank
+
+compressor = FlashrankRerank(top_n=7)
+
+
 def get_conversation_chain(vectorstore):
     langchain.verbose = False
     llm = ChatOpenAI(model=gpt_model, temperature=0.5)
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     # Define your system message template
-    general_system_template = """You are a superintelligent AI that answers questions about codebases.
-    You are:
-    - helpful & friendly
-    - good at answering complex questions in simple language
-    - an expert in all programming languages
-    - able to infer the intent of the user's question
+    general_system_template = """You are a clever programming assistant. You answer questions
+    in a concise, informative, friendly yet imperative tone.
 
-    The user will ask a question about their codebase, and you will answer it.
+    The user will ask a question about their codebase, and you will answer it. Using the contextual
+    code fragments and documentation provided. You will not make any assumptions about the codebase
+    beyond what is presented to you as context.
 
-    When the user asks their question, you will answer it by searching the codebase for the answer.
-    Answer the question using the code file(s) below:
+    When the user asks their question, you will answer it by using the provided code fragments.
+    Answer the question using the code below. Explain your reasoning in simple steps. Be assertive!
+    
     ----------------
-        {context}"""
+    
+    {context}
+    
+    """
     # Define your user message template
     general_user_template = "Question:```{question}```"
 
@@ -73,10 +82,14 @@ def get_conversation_chain(vectorstore):
     qa_prompt = ChatPromptTemplate.from_messages(
         [system_message_prompt, user_message_prompt]
     )
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor,
+        base_retriever=vectorstore.as_retriever()
+    )
 
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
-        retriever=vectorstore.as_retriever(),
+        retriever=compression_retriever,
         memory=memory,
         combine_docs_chain_kwargs={"prompt": qa_prompt},
     )
@@ -101,7 +114,6 @@ app = FastAPI()
 
 def collection_exists():
     db = storage.vector_db
-    return False
     return db._collection.count() > 1
 
 
@@ -160,10 +172,8 @@ def find_readme(documents: List[Document]) -> Document:
     return root_readme
 
 
-
-
 @app.post("/query/")
-async def query(request: Request):
+async def query(query: Request):
     client = httpx.AsyncClient()
     try:
         if not collection_exists():  # db does not exist
@@ -175,21 +185,25 @@ async def query(request: Request):
                     # todo: what do if repo is missing a main readme file?
                     raise
                 else:
+                    logger.debug(f'Found root readme file {readme.metadata["file_path"]}')
                     repo_summary_task = summaries.SummarizeRepo(
                         content=readme.metadata['enriched_page_content'],
                         repo_name=repo.name,
                         tree=repo.tree,
                     )
                     repo_summary = await summaries.produce(repo_summary_task, client)
+                    logger.debug(f'Summarized repo summary task: {repo_summary}')
+
                     repo.metadata['summary'] = repo_summary
                     chunks = await splitting.split_documents(
                         documents=repo.documents,
                         repo=repo,
                         client=client
                     )
+
                     db = storage.vector_db
+                    logger.debug(f'Found {len(chunks)} chunks')
                     db.add_documents(chunks)
-                db.persist()
 
         vectorstore = storage.vector_db
         convo_chain = get_conversation_chain(vectorstore)
