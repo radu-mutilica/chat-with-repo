@@ -1,0 +1,18 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: sync
+          path: ./
+          target: /app
+    ports:
+      - "8080:80"
+    command: uvicorn app:app --reload --host 0.0.0.0 --port 80
+    container_name: api
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      CORCEL_API_KEY: "${CORCEL_API_KEY}"
+      GITHUB_URL: "${GITHUB_URL}"

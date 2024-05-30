@@ -11,7 +11,8 @@ load_dotenv()
 
 log_level = logging.DEBUG
 
-chroma_persist_directory = str(pathlib.Path.cwd() / 'chroma')
+chroma_persist_directory = os.environ.get(
+    'CHROMA_STORAGE_PATH', str(pathlib.Path.cwd() / 'chroma'))
 
 openai = Provider(
     name='OpenAI',

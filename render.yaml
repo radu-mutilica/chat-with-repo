@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: api
+    runtime: docker
+    repo: https://github.com/radu-mutilica/chat-with-repo
+    plan: pro plus
+    envVars:
+      - key: ANONYMIZED_TELEMETRY
+        value: FALSE
+      - key: IS_PERSISTENT
+        value: TRUE
+      - key: PERSIST_DIRECTORY
+        value: /chromadb
+      - key: CHROMA_STORAGE_PATH
+        value: /chromadb
+      - fromGroup: veggie-scout-envs
+
+    region: frankfurt
+    disk:
+      name: data
+      mountPath: /chromadb
+      sizeGB: 5

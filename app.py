@@ -14,7 +14,6 @@ from langchain.prompts.chat import (
     HumanMessagePromptTemplate,
 )
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain_community.document_compressors import FlashrankRerank
 from langchain_community.document_loaders import GitLoader
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI
@@ -60,7 +59,8 @@ def get_conversation_chain(vectorstore):
     beyond what is presented to you as context.
 
     When the user asks their question, you will answer it by using the provided code fragments.
-    Answer the question using the code below. Explain your reasoning in simple steps. Be assertive!
+    Answer the question using the code below. Explain your reasoning in simple steps. Be assertive
+    and quote code fragments if needed.
     
     ----------------
     
@@ -96,8 +96,15 @@ def get_conversation_chain(vectorstore):
     return conversation_chain
 
 
+class Message(BaseModel):
+    role: str
+    content: str
+
+
 class Request(BaseModel):
-    query: str
+    model: str = None
+    temperature: float = None
+    messages: List[Message]
 
     class Config:
         schema_extra = {
@@ -207,7 +214,7 @@ async def query(query: Request):
 
         vectorstore = storage.vector_db
         convo_chain = get_conversation_chain(vectorstore)
-        response = convo_chain({"question": query.query})
+        response = convo_chain({"question": query.messages[0].content})
         return response
     except Exception:
         logger.exception('Failed to fulfill request because:')
