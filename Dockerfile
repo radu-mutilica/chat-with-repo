@@ -22,8 +22,7 @@ RUN adduser \
 
 RUN apt update -y && apt install -y gcc clang clang-tools cmake python3 git g++-11 gcc-11
 
-RUN FORCE_CMAKE=1 pip install  llama-cpp-python --no-cache-dir
-
+CMAKE_ARGS="-DLLAMA_HIPBLAS=on -DLLAMA_CLBLAST=on -DCMAKE_C_COMPILER=/opt/rocm/llvm/bin/clang -DCMAKE_CXX_COMPILER=/opt/rocm/llvm/bin/clang++ -DCMAKE_PREFIX_PATH=/opt/rocm" FORCE_CMAKE=1 pip install llama-cpp-python
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /root/.cache/pip to speed up subsequent builds.
@@ -35,5 +34,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 
 # Switch to the non-privileged user to run the application.
+RUN chown -R appuser:appuser /app
 USER appuser
 
