@@ -10,6 +10,7 @@ COPY . .
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
+RUN apt install adduser
 RUN adduser \
     --disabled-password \
     --gecos "" \
