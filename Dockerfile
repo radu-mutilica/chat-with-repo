@@ -20,8 +20,9 @@ RUN adduser \
     appuser
 
 
-RUN apt update && apt install -y gcc clang clang-tools cmake python3 git g++-11 gcc-11
-RUN CMAKE_ARGS="-DLLAMA_CUBLAS=on" FORCE_CMAKE=1 pip install  llama-cpp-python --no-cache-dir
+RUN apt update -y && apt install -y gcc clang clang-tools cmake python3 git g++-11 gcc-11
+
+RUN FORCE_CMAKE=1 pip install  llama-cpp-python --no-cache-dir
 
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
