@@ -95,7 +95,7 @@ services:
       - key: LOG_LEVEL
         value: DEBUG
       - key: GITHUB_URL
-        value: https://github.com/namoray/vision-workers
+        value: https://github.com/namoray/vision
       - key: CHROMA_COLLECTION
         value: chat-with-repo
       - key: CHROMA_NAME
