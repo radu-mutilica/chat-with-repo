@@ -47,7 +47,7 @@ async def split_document(document, repo, client) -> List[Document]:
     extension = os.path.splitext(document.metadata["source"])[1]
     language = extensions.identify_language(extension)
 
-    file_summary = await perform(
+    file_summary = perform(
         summaries.SummarizeFile(
             repo_name=repo.name,
             repo_summary=repo.metadata['summary'],
@@ -59,13 +59,12 @@ async def split_document(document, repo, client) -> List[Document]:
         ),
         client=client
     )
-
     splitter = prepare_splitter(language=language)
     snippets = splitter.create_documents([document.page_content])
 
     # Swap the content for just the summary
     document.metadata['original_page_content'] = document.page_content
-    document.page_content = file_summary
+    document.page_content = await file_summary
     document.metadata['language'] = language
     document.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
         source=document.metadata['file_path'],
@@ -74,7 +73,7 @@ async def split_document(document, repo, client) -> List[Document]:
 
     for idx, snippet in enumerate(snippets):
         snippet.metadata.update(document.metadata)
-        snippet_summary = await perform(
+        snippet_summary = perform(
             summaries.SummarizeSnippet(
                 repo_name=repo.name,
                 repo_summary=repo.metadata['summary'],
@@ -91,7 +90,7 @@ async def split_document(document, repo, client) -> List[Document]:
             source=document.metadata['file_path'],
             index=idx
         )
-        snippet.page_content = snippet_summary
+        snippet.page_content = await snippet_summary
 
     snippets.insert(0, document)
     return snippets
