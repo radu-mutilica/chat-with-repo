@@ -16,6 +16,7 @@ services:
     command: uvicorn app:app --reload --host 0.0.0.0 --port 80
     container_name: api
     environment:
+      SIM_SEARCH_TOP_K: "25"
       CHROMA_HOST: "chromadb"
       CHROMA_PORT: "8000"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"

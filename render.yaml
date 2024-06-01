@@ -26,6 +26,8 @@ services:
     repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
     envVars:
+      - key: SIM_SEARCH_TOP_K
+        value: 25
       - key: LOG_LEVEL
         value: DEBUG
       - key: CHROMA_PASSWORD

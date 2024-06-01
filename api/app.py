@@ -22,6 +22,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 collection_name = os.environ['CHROMA_COLLECTION']
+sim_search_top_k = int(os.environ['SIM_SEARCH_TOP_K'])
 
 app = FastAPI()
 
@@ -38,7 +39,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
         context = await build_context(
             search_query=question,
-            sim_top_k=50,
+            sim_top_k=sim_search_top_k,
             client=client
         )
 
