@@ -85,17 +85,10 @@ async def build_context(
         doc = Document(page_content=content, metadata=metadata)
         documents.append(doc)
 
-    ranked_pairs = []
-    ranks = await ranks
-    for index in range(len(ranks)):
-        ranked_pairs.append((
-            documents[index],
-            ranks[index]
-        ))
+    ranked_snippets = []
+    for rank in await ranks:
+        ranked_snippets.append(
+            documents[int(rank['corpus_id'])],
+        )
 
-    sorted_snippets = [
-        pair[0] for pair in
-        sorted(ranked_pairs, key=lambda x: x[1], reverse=True)
-    ]
-
-    return format_context(sorted_snippets)
+    return format_context(ranked_snippets)

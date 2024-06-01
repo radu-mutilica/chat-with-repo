@@ -37,4 +37,7 @@ async def crossencoder(query: str, documents: typing.List[str]):
     )
 
     # Cast to float since, in FastAPI's opinion, numpy.float32 are not serializable
-    return [float(rank['score']) for rank in ranks]
+    for rank in ranks:
+        rank['score'] = float(rank['score'])
+
+    return ranks
