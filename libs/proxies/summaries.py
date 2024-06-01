@@ -1,6 +1,6 @@
 import httpx
 
-import config
+from libs.proxies import config
 from libs.models import ProxyResponse, QueryPrompts
 
 _assistant_prefix = """You are an expert programming assistant. You provide concise, informative 

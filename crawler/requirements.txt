@@ -1,9 +1,10 @@
+uvicorn
 httpx~=0.27.0
-langchain~=0.2.1
 fastapi~=0.111.0
-python-dotenv~=1.0.1
+GitPython
 directory-structure~=1.1.2
+langchain~=0.2.1
 langchain-community~=0.2.1
 langchain-openai~=0.1.8
 langchain-chroma
-flashrank
+sentence-transformers~=3.0.0

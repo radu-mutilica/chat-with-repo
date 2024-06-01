@@ -2,17 +2,94 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: api/Dockerfile
     develop:
       watch:
         - action: sync
           path: ./
           target: /app
+        - action: sync
+          path: ./libs
+          target: /app/libs
     ports:
       - "8080:80"
     command: uvicorn app:app --reload --host 0.0.0.0 --port 80
     container_name: api
     environment:
-      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      CHROMA_HOST: "chromadb"
+      CHROMA_PORT: "8000"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      LOG_LEVEL: "DEBUG"
+    depends_on:
+      - chromadb
+    networks:
+      - net
+
+  crawler:
+    build:
+      context: .
+      dockerfile: crawler/Dockerfile
+    container_name: crawler
+    command: python main.py
+    environment:
       GITHUB_URL: "${GITHUB_URL}"
+      CORCEL_API_KEY: "${CORCEL_API_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      CHROMA_HOST: "chromadb"
+      CHROMA_PORT: "8000"
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+      LOG_LEVEL: "DEBUG"
+    depends_on:
+      - chromadb
+    networks:
+      - net
+
+  reranker:
+    build:
+      context: .
+      dockerfile: reranker/Dockerfile
+    command: uvicorn api:app --reload --host 0.0.0.0 --port 80
+    container_name: reranker
+    ports:
+      - "8081:80"
+    develop:
+      watch:
+        - action: sync
+          path: ./reranker
+          target: /app
+        - action: sync
+          path: ./libs
+          target: /app/libs
+    environment:
+      CROSSENCODER_TOP_K: "5"
+
+    networks:
+      - net
+    links:
+      - api
+
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    volumes:
+      - index_data:/chroma/.chroma/index
+    ports:
+      - "8000:8000"
+    environment:
+      CHROMA_PORT: "8000"
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+      CHROMA_STORAGE_PATH: ""
+    networks:
+      - net
+
+volumes:
+  index_data:
+    driver: local
+
+networks:
+  net:
+    driver: bridge

@@ -20,6 +20,14 @@ enriched_snippet_fmt = """
 
 {content}
 """
+extra_readme_append_fmt = """
+***
+Document path: {file_path}
+Document contents:
+{page_content}
+***
+"""
+
 
 def prepare_splitter(language: Language) -> TextSplitter:
     global splitters
@@ -104,3 +112,49 @@ def build_context(current_index, document_snippets):
     max_idx = current_index + contextual_window_snippet_radius
 
     return '\n'.join((doc.page_content for doc in document_snippets[min_idx:max_idx]))
+
+
+def merge_readmes(readme, other_readmes):
+    enriched_page_content = readme.page_content
+    referenced_files = {}
+    for line in readme.page_content.splitlines():
+        for other_readme in other_readmes:
+            if other_readme.metadata['file_path'] in line:
+                referenced_files[other_readme.metadata['file_path']] = other_readme
+
+    if referenced_files:
+        for file_path, other_readme in referenced_files.items():
+            enriched_page_content += extra_readme_append_fmt.format(
+                file_path=file_path,
+                page_content=other_readme.page_content
+            )
+
+    readme.metadata['enriched_page_content'] = enriched_page_content
+
+    return readme
+
+
+def find_readme(documents: List[Document]) -> Document:
+    other_readmes = []
+    root_readme = None
+    for index, document in enumerate(documents):
+
+        if document.metadata['file_path'].lower() == 'readme.md':
+            # This must be the root repo readme file
+            root_readme = document
+        elif document.metadata['file_name'].lower().endswith('.md'):
+            # These are some other readme files, probably relevant still
+            other_readmes.append(document)
+
+    if root_readme:
+        if other_readmes:
+            root_readme = merge_readmes(root_readme, other_readmes)
+
+    else:
+        raise MissingReadme('no main readme file found')
+
+    return root_readme
+
+
+class MissingReadme(Exception):
+    pass

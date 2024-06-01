@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict
 
 from langchain_core.documents import Document
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel
 
 
 class Repo(BaseModel):
@@ -65,3 +65,43 @@ class Model(BaseModel):
     @property
     def url(self):
         return f'{self.provider.url}/{self.endpoint}'
+
+
+def flatten_list(original):
+    return original[0]
+
+
+def to_snippets(distances, documents, ids, metadatas, **_):
+    """Convert a stream of vecdb lists into individual snippets"""
+    snippets = []
+
+    for distance, document, vecdb_idx, metadata in zip(
+            distances[0],
+            documents[0],
+            ids[0],
+            metadatas[0]
+    ):
+        metadata['vecdb_idx'] = vecdb_idx
+        snippets.append(Document(
+            vecdb_idx=vecdb_idx,
+            metadata=metadata,
+            distance=distance,
+            page_content=document
+        ))
+
+    return snippets
+
+
+class RequestParams(BaseModel):
+    query: str = 'I like you'
+    documents: List[dict]
+
+
+class Message(BaseModel):
+    role: str = 'user'
+    content: RequestParams | str
+
+
+class RequestData(BaseModel):
+    model: str = 'model_name'
+    messages: List[Message]

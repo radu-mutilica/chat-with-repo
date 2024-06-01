@@ -5,13 +5,56 @@ services:
     repo: https://github.com/radu-mutilica/chat-with-repo
     plan: pro plus
     envVars:
+      - fromGroup: veggie-scout-envs
+    region: frankfurt
+    dockerCommand: python main.py
+    dockerContext: .
+    dockerfilePath: ./crawler/Dockerfile
+    rootDir: .
+    buildFilter:
+      ignoredPaths:
+        - crawler/**
+
+  - type: cron
+    name: crawler
+    runtime: docker
+    repo: https://github.com/corcel-api/veggie-scout
+    plan: standard
+    envVars:
+      - key: CHROMA_HOST
+        fromService:
+          name: chroma
+          type: pserv
+          property: host
+      - key: CHROMA_PORT
+        fromService:
+          name: chroma
+          type: pserv
+          property: port
+      - fromGroup: veggie-scout-envs
+
+    region: frankfurt
+    schedule: '*/60 * * * *'
+    dockerCommand: python main.py
+    dockerContext: .
+    dockerfilePath: ./crawler/Dockerfile
+    rootDir: .
+    buildFilter:
+      ignoredPaths:
+        - api/**
+
+  - type: pserv
+    name: chroma
+    runtime: image
+    image:
+      url: docker.io/chromadb/chroma:latest
+    plan: standard
+    envVars:
       - key: ANONYMIZED_TELEMETRY
         value: FALSE
       - key: IS_PERSISTENT
         value: TRUE
       - key: PERSIST_DIRECTORY
-        value: /chromadb
-      - key: CHROMA_STORAGE_PATH
         value: /chromadb
       - fromGroup: veggie-scout-envs
 

@@ -1,18 +1,7 @@
-import logging
 import os
-import pathlib
-
-from dotenv import load_dotenv
 
 from libs.models import Provider, Model
 
-load_dotenv()
-
-
-log_level = logging.DEBUG
-
-chroma_persist_directory = os.environ.get(
-    'CHROMA_STORAGE_PATH', str(pathlib.Path.cwd() / 'chroma'))
 
 openai = Provider(
     name='OpenAI',
