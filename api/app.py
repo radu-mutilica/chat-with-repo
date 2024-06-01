@@ -1,7 +1,9 @@
 import logging
 import os
+import time
 from typing import List
 
+import httpx
 import langchain
 from fastapi import FastAPI, HTTPException
 from langchain.chains import ConversationalRetrievalChain
@@ -110,3 +112,24 @@ async def chat_with_repo(request: Request):
     except Exception:
         logger.exception('Failed to fulfill request because:')
         raise HTTPException(status_code=500, detail="An error occurred while processing the query")
+
+
+async def build_context(
+        search_query: str,
+        sim_search_top_k: int,
+        client: httpx.AsyncClient
+) -> List:
+    start = time.time()
+    search_query_embedding = proxies.external.generate_embedding(search_query, client)
+    logger.info(f'Got embedding for user search query, took {round(time.time() - start, 2)}s')
+
+    search_query_embedding = await search_query_embedding
+    similar_vectors = await storage.vector_db.query(
+        query_embeddings=search_query_embedding,
+        n_results=sim_search_top_k
+    )
+    similar_snippets_count = len(similar_vectors)
+    logger.debug(f'Retrieved {len(similar_vectors)} snippets from similarity search. '
+                 f'top_k={sim_search_top_k}')
+
+    return similar_snippets_count
