@@ -23,7 +23,7 @@ services:
   - type: web
     name: api
     runtime: docker
-    repo: https://github.com/corcel-api/veggie-scout
+    repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
     envVars:
       - key: LOG_LEVEL
@@ -68,7 +68,7 @@ services:
   - type: pserv
     name: reranker
     runtime: docker
-    repo: https://github.com/corcel-api/veggie-scout
+    repo: https://github.com/radu-mutilica/chat-with-repo
     plan: pro plus
     envVars:
       - key: LOG_LEVEL
@@ -89,7 +89,7 @@ services:
   - type: cron
     name: crawler
     runtime: docker
-    repo: https://github.com/corcel-api/veggie-scout
+    repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
     envVars:
       - key: GITHUB_URL
