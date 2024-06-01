@@ -56,7 +56,7 @@ services:
           property: port
       - fromGroup: veggie-scout-envs
     region: frankfurt
-    dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    dockerCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     dockerContext: .
     dockerfilePath: ./api/Dockerfile
     buildFilter:

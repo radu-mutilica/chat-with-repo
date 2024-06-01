@@ -11,7 +11,7 @@ File: {path}
 Summary: {summary}
 """
 
-contextual_snippet_fmt = """
+contextual_code_fmt = """
 File: {path}
 Code: {code}
 Summary: {summary}
@@ -66,7 +66,7 @@ def format_context(contextual_chunks):
         context += prompt_separator
 
     for code_chunk in code_chunks:
-        context += contextual_file_fmt.format(
+        context += contextual_code_fmt.format(
             path=code_chunk.metadata['file_path'],
             summary=code_chunk.page_content,
             code=code_fmt.format(

@@ -75,7 +75,7 @@ services:
           path: ./libs
           target: /app/libs
     environment:
-      CROSSENCODER_TOP_K: "5"
+      CROSSENCODER_TOP_K: "7"
 
     networks:
       - net
