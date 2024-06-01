@@ -23,9 +23,8 @@ _language_map = {
     ".sol": Language.SOL,
     ".css": Language.HTML,
     ".txt": Language.MARKDOWN,
-    ".json": Language.MARKDOWN,
 }
 
 
 def identify_language(extension: str) -> Language:
-    return _language_map.get(extension, Language.MARKDOWN)
+    return _language_map.get(extension)

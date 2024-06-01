@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from typing import List
 
@@ -9,6 +10,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitte
 from libs import extensions
 from libs.models import Repo
 from libs.proxies import summaries, perform
+
+logger = logging.getLogger(__name__)
 
 splitters = {}
 contextual_window_snippet_radius = 2
@@ -69,7 +72,9 @@ async def split_document(document, repo, client) -> List[Document]:
     except httpx.HTTPError:
         # Failed to summarize file, most likely because it exceeds token limit
         # todo: better error handling, diagnostics here
+        logger.error(f"Failed to summarize document {document.metadata['file_path']}")
         document.page_content = ''
+
     document.metadata['language'] = language
     document.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
         source=document.metadata['file_path'],
@@ -98,7 +103,10 @@ async def split_document(document, repo, client) -> List[Document]:
         )
         snippet.page_content = await snippet_summary
 
-    snippets.insert(0, document)
+    # No reason to add the document if we didn't compute a summary for it
+    if document.page_content:
+        snippets.insert(0, document)
+
     return snippets
 
 
