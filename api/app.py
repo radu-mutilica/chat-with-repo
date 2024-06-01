@@ -18,7 +18,6 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from libs import storage
-from . import prompts
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
@@ -41,6 +40,25 @@ class Request(BaseModel):
 
 
 app = FastAPI()
+
+system_prompt_fmt = """You are a clever programming assistant. You answer questions
+    in a concise, informative, friendly yet imperative tone.
+
+    The user will ask a question about their codebase, and you will answer it. Using the contextual
+    code fragments and documentation provided. You will not make any assumptions about the codebase
+    beyond what is presented to you as context.
+
+    When the user asks their question, you will answer it by using the provided code fragments.
+    Answer the question using the code below. Explain your reasoning in simple steps. Be assertive
+    and quote code fragments if needed.
+
+    ----------------
+
+    {context}
+    """
+
+user_prompt_fmt = "Question: {question}"
+
 reranker = HuggingFaceCrossEncoder(model_name="cross-encoder/ms-marco-MiniLM-L-2-v2")
 compressor = CrossEncoderReranker(model=reranker, top_n=3)
 
@@ -56,8 +74,8 @@ def get_conversation_chain(vectorstore):
         return_messages=True
     )
 
-    general_system_template = prompts.system_prompt_fmt
-    general_user_template = prompts.user_prompt_fmt
+    general_system_template = system_prompt_fmt
+    general_user_template = user_prompt_fmt
 
     system_message_prompt = SystemMessagePromptTemplate.from_template(
         general_system_template
@@ -86,7 +104,6 @@ def get_conversation_chain(vectorstore):
 @app.post("/chat/")
 async def chat_with_repo(request: Request):
     try:
-        print("chat", request)
         conversation_chain = get_conversation_chain(storage.vector_db)
         response = conversation_chain({"question": request.messages[0].content})
         return response
