@@ -39,6 +39,7 @@ def load_repo(url: str, temp_path: str, branch='main') -> Repo:
 async def main():
     client = httpx.AsyncClient()
     with tempfile.TemporaryDirectory() as local_path:
+        logger.info(f'Loading following repository: {github_url}')
         repo = load_repo(github_url, local_path, branch="main")
         try:
             readme = splitting.find_readme(repo.documents)

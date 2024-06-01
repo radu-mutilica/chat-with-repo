@@ -64,7 +64,12 @@ async def split_document(document, repo, client) -> List[Document]:
 
     # Swap the content for just the summary
     document.metadata['original_page_content'] = document.page_content
-    document.page_content = await file_summary
+    try:
+        document.page_content = await file_summary
+    except httpx.HTTPError:
+        # Failed to summarize file, most likely because it exceeds token limit
+        # todo: better error handling, diagnostics here
+        document.page_content = ''
     document.metadata['language'] = language
     document.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
         source=document.metadata['file_path'],
@@ -80,6 +85,7 @@ async def split_document(document, repo, client) -> List[Document]:
                 tree=repo.tree,
                 language=language,
                 file_path=snippet.metadata['file_path'],
+                file_summary=document.page_content,
                 context=build_context(idx, snippets),
                 content=snippet.page_content),
             client=client

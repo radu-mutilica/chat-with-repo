@@ -10,12 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 async def perform(task: ProxyLLMTask, client: httpx.AsyncClient) -> CompletionResponse:
+    payload = {
+        "model": task.model.name,
+        "messages": task.prompts.api_format()
+    }
     try:
-        payload = {
-            "model": task.model.name,
-            "messages": task.prompts.api_format()
-        }
-
         response = await client.post(
             url=task.model.url,
             json=payload,
@@ -30,6 +29,6 @@ async def perform(task: ProxyLLMTask, client: httpx.AsyncClient) -> CompletionRe
         logger.error(f"HTTP Exception for {exc.request.url} - {exc}")
         logger.debug(f"Info about payload: \n{payload}")
         for idx, message in enumerate(payload['messages']):
-            logger.debug(f'Message #{idx}: size of {message["role"]} prompt: {len(message["content"])}')
+            logger.debug(f'Msg #{idx}: size of {message["role"]} prompt: {len(message["content"])}')
         raise
 

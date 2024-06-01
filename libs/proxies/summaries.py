@@ -88,12 +88,15 @@ class SummarizeSnippet(ProxyLLMTask):
     {tree}
     ```
     
-    Based on this fragment of code from '{file_path}':
+    You have the following file '{file_path}' which has the contains the following:
+    {file_summary}
+    
+    Here is a fragment of code from '{file_path}':
     ```{language}
     {context}
     ```
     
-    What does the following snippet do?
+    What does the following code do?
     ```
     {content}
     ```
