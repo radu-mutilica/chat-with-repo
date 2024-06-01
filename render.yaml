@@ -1,19 +1,90 @@
 services:
+  - type: pserv
+    name: chroma
+    runtime: image
+    image:
+      url: docker.io/chromadb/chroma:latest
+    plan: standard
+    envVars:
+      - key: ANONYMIZED_TELEMETRY
+        value: FALSE
+      - key: IS_PERSISTENT
+        value: TRUE
+      - key: PERSIST_DIRECTORY
+        value: /chromadb
+      - fromGroup: veggie-scout-envs
+
+    region: frankfurt
+    disk:
+      name: data
+      mountPath: /chromadb
+      sizeGB: 5
+
   - type: web
     name: api
     runtime: docker
-    repo: https://github.com/radu-mutilica/chat-with-repo
-    plan: pro plus
+    repo: https://github.com/corcel-api/veggie-scout
+    plan: standard
     envVars:
+      - key: LOG_LEVEL
+        value: DEBUG
+      - key: CHROMA_PASSWORD
+        sync: false
+      - key: CHROMA_USER
+        sync: false
+      - key: CHROMA_COLLECTION
+        value: chat-with-repo
+      - key: CHROMA_HOST
+        fromService:
+          name: chroma
+          type: pserv
+          property: host
+      - key: CHROMA_PORT
+        fromService:
+          name: chroma
+          type: pserv
+          property: port
+      - key: RERANKER_HOST
+        fromService:
+          name: reranker
+          type: pserv
+          property: host
+      - key: RERANKER_PORT
+        fromService:
+          name: reranker
+          type: pserv
+          property: port
       - fromGroup: veggie-scout-envs
     region: frankfurt
-    dockerCommand: python main.py
+    dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
     dockerContext: .
-    dockerfilePath: ./crawler/Dockerfile
-    rootDir: .
+    dockerfilePath: ./api/Dockerfile
     buildFilter:
       ignoredPaths:
         - crawler/**
+        - reranker/**
+    rootDir: .
+
+  - type: pserv
+    name: reranker
+    runtime: docker
+    repo: https://github.com/corcel-api/veggie-scout
+    plan: pro plus
+    envVars:
+      - key: LOG_LEVEL
+        value: DEBUG
+      - key: CROSSENCODER_TOP_K
+        value: 5
+      - fromGroup: veggie-scout-envs
+    region: frankfurt
+    dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    dockerContext: .
+    dockerfilePath: ./reranker/Dockerfile
+    buildFilter:
+      ignoredPaths:
+        - crawler/**
+        - api/**
+    rootDir: .
 
   - type: cron
     name: crawler
@@ -21,6 +92,12 @@ services:
     repo: https://github.com/corcel-api/veggie-scout
     plan: standard
     envVars:
+      - key: GITHUB_URL
+        value: https://github.com/corcel-api/vision-workers
+      - key: CHROMA_COLLECTION
+        value: chat-with-repo
+      - key: CHROMA_NAME
+        value: chromadb
       - key: CHROMA_HOST
         fromService:
           name: chroma
@@ -42,24 +119,6 @@ services:
     buildFilter:
       ignoredPaths:
         - api/**
+        - reranker/**
 
-  - type: pserv
-    name: chroma
-    runtime: image
-    image:
-      url: docker.io/chromadb/chroma:latest
-    plan: standard
-    envVars:
-      - key: ANONYMIZED_TELEMETRY
-        value: FALSE
-      - key: IS_PERSISTENT
-        value: TRUE
-      - key: PERSIST_DIRECTORY
-        value: /chromadb
-      - fromGroup: veggie-scout-envs
-
-    region: frankfurt
-    disk:
-      name: data
-      mountPath: /chromadb
-      sizeGB: 5
+version: "1"

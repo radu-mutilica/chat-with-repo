@@ -31,8 +31,8 @@ async def rerank(request: RequestData):
 
     start = time.time()
     ranks = await reranker(
-        query=content.query,
-        documents=[document['page_content'] for document in content.documents]
+        query=content['query'],
+        documents=content['documents']
     )
     logger.debug(f"New ranks generated in {round(time.time() - start, 2)}s: {ranks}")
 

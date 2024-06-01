@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from langchain_core.documents import Document
 from pydantic import BaseModel
@@ -8,14 +8,19 @@ class Repo(BaseModel):
     name: str
     branch: str
     url: str
-    documents: List[Document]
+    documents: List
     tree: str
     metadata: Dict = {}
 
 
-class Usage(BaseModel):
+class CompletionUsage(BaseModel):
     prompt_tokens: int
     completion_tokens: int
+    total_tokens: int
+
+
+class EmbeddingUsage(BaseModel):
+    prompt_tokens: int
     total_tokens: int
 
 
@@ -25,13 +30,26 @@ class Choice(BaseModel):
     finish_reason: Optional[str]
 
 
-class ProxyResponse(BaseModel):
+class CompletionResponse(BaseModel):
     id: str
     object: str
     created: int
     model: str
     choices: List[Choice]
-    usage: Optional[Usage]
+    usage: Optional[CompletionUsage]
+
+
+class Object(BaseModel):
+    object: str
+    index: int
+    embedding: List[float]
+
+
+class EmbeddingResponse(BaseModel):
+    object: str
+    data: List[Object]
+    model: str
+    usage: Optional[EmbeddingUsage]
 
 
 class QueryPrompts(BaseModel):
@@ -92,16 +110,27 @@ def to_snippets(distances, documents, ids, metadatas, **_):
     return snippets
 
 
-class RequestParams(BaseModel):
-    query: str = 'I like you'
-    documents: List[dict]
-
-
 class Message(BaseModel):
     role: str = 'user'
-    content: RequestParams | str
+    content: Any
 
 
 class RequestData(BaseModel):
     model: str = 'model_name'
     messages: List[Message]
+
+
+class ProxyLLMTask:
+    system_prompt = ''
+    user_prompt = ''
+    model = None
+
+    def __init__(self, **kwargs):
+        system_prompt = self.system_prompt.format(**kwargs)
+        user_prompt = self.user_prompt.format(**kwargs)
+
+        self._prompts = QueryPrompts(system=system_prompt, user=user_prompt)
+
+    @property
+    def prompts(self):
+        return self._prompts

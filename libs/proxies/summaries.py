@@ -1,31 +1,14 @@
-import httpx
-
-from libs.proxies import config
-from libs.models import ProxyResponse, QueryPrompts
+from libs.models import Model, ProxyLLMTask
+from libs.proxies.providers import openai
 
 _assistant_prefix = """You are an expert programming assistant. You provide concise, informative 
 and friendly answers to questions you are given. Your task is to """
 
-timeout = httpx.Timeout(10.0, read=None)
+summaries = Model(name='gpt-3.5-turbo', provider=openai, endpoint='chat/completions')
 
 
-class SummaryTask:
-    system_prompt = ''
-    user_prompt = ''
-    model = config.summaries
-
-    def __init__(self, **kwargs):
-        system_prompt = self.system_prompt.format(**kwargs)
-        user_prompt = self.user_prompt.format(**kwargs)
-
-        self._prompts = QueryPrompts(system=system_prompt, user=user_prompt)
-
-    @property
-    def prompts(self):
-        return self._prompts
-
-
-class SummarizeRepo(SummaryTask):
+class SummarizeRepo(ProxyLLMTask):
+    model = summaries
     system_prompt = _assistant_prefix + """ come up with a description of what you believe a
     github repository does. For context, you will be given the repository's Readme, as well
     as the repository's file structure. Do not make any assumptions, stick to the context and if you
@@ -45,7 +28,9 @@ class SummarizeRepo(SummaryTask):
     is structured."""
 
 
-class SummarizeFile(SummaryTask):
+class SummarizeFile(ProxyLLMTask):
+    model = summaries
+
     system_prompt = _assistant_prefix + """come up with a description of what you believe a file 
     containing programming code does. You will be also be given the originating repository's 
     description, as well as the repository's file structure, to aid you with context.
@@ -77,7 +62,9 @@ class SummarizeFile(SummaryTask):
     """
 
 
-class SummarizeSnippet(SummaryTask):
+class SummarizeSnippet(ProxyLLMTask):
+    model = summaries
+
     system_prompt = _assistant_prefix + """come up with a description of a short code snippet, from
     a larger code paragraph, contained in a file present in a greater repository. For context in
     summarizing this snippet, you will be given the immediate code context it is present in, the 
@@ -113,20 +100,3 @@ class SummarizeSnippet(SummaryTask):
     
     Provide a short, condensed 1 sentence summary of what you believe the snippet does.
     """
-
-
-async def produce(summary_task: SummaryTask, client: httpx.AsyncClient) -> ProxyResponse:
-    payload = {
-        "model": summary_task.model.name,
-        "messages": summary_task.prompts.api_format()
-    }
-
-    response = await client.post(
-        url=summary_task.model.url,
-        json=payload,
-        headers=summary_task.model.provider.headers,
-        timeout=timeout)
-
-    response.raise_for_status()
-    raw_response = response.json()
-    return raw_response['choices'][0]['message']['content']

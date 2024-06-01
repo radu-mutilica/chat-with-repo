@@ -2,14 +2,13 @@ import os
 from typing import List
 
 from httpx import AsyncClient
-from langchain_core.documents import Document
 
 RERANKER_HEADERS = {
     "Content-Type": "application/json",
 }
 
 
-async def rerank(query: str, snippets: List[Document], client: AsyncClient):
+async def rerank(query: str, documents: List[str], client: AsyncClient):
     payload = {
         "model": "crossencoder",
         "messages": [
@@ -17,7 +16,7 @@ async def rerank(query: str, snippets: List[Document], client: AsyncClient):
                 "role": "system",
                 "content": {
                     "query": query,
-                    "documents": [snippet.dict() for snippet in snippets]
+                    "documents": documents
                 }
             }
 

@@ -8,12 +8,12 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitte
 
 from libs import extensions
 from libs.models import Repo
-from libs.proxies import summaries
+from libs.proxies import summaries, perform
 
 splitters = {}
 contextual_window_snippet_radius = 2
 
-enriched_snippet_fmt = """
+summary = """
 # {file_path}
 # {file_summary}
 # {snippet_summary}
@@ -27,6 +27,8 @@ Document contents:
 {page_content}
 ***
 """
+
+vecdb_idx_fmt = "{source}:{index}"
 
 
 def prepare_splitter(language: Language) -> TextSplitter:
@@ -45,7 +47,7 @@ async def split_document(document, repo, client) -> List[Document]:
     extension = os.path.splitext(document.metadata["source"])[1]
     language = extensions.identify_language(extension)
 
-    document.metadata['file_summary'] = await summaries.produce(
+    file_summary = await perform(
         summaries.SummarizeFile(
             repo_name=repo.name,
             repo_summary=repo.metadata['summary'],
@@ -58,33 +60,41 @@ async def split_document(document, repo, client) -> List[Document]:
         client=client
     )
 
-    # Get the extension and prepare the appropriate splitter
     splitter = prepare_splitter(language=language)
+    snippets = splitter.create_documents([document.page_content])
 
-    document_snippets = splitter.create_documents([document.page_content])
+    # Swap the content for just the summary
+    document.metadata['original_page_content'] = document.page_content
+    document.page_content = file_summary
+    document.metadata['language'] = language
+    document.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
+        source=document.metadata['file_path'],
+        index='main'
+    )
 
-    for idx, snippet in enumerate(document_snippets):
+    for idx, snippet in enumerate(snippets):
         snippet.metadata.update(document.metadata)
-        snippet.metadata['snippet_summary'] = await summaries.produce(
+        snippet_summary = await perform(
             summaries.SummarizeSnippet(
                 repo_name=repo.name,
                 repo_summary=repo.metadata['summary'],
                 tree=repo.tree,
                 language=language,
                 file_path=snippet.metadata['file_path'],
-                context=build_context(idx, document_snippets),
+                context=build_context(idx, snippets),
                 content=snippet.page_content),
             client=client
         )
+        # Store the "code" in the metadata
         snippet.metadata['original_page_content'] = snippet.page_content
-        snippet.page_content = enriched_snippet_fmt.format(
-            file_summary=snippet.metadata['file_summary'].replace('\n', ' '),
-            snippet_summary=snippet.metadata['snippet_summary'].replace('\n', ' '),
-            content=snippet.metadata['original_page_content'],
-            file_path=snippet.metadata['file_path']
+        snippet.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
+            source=document.metadata['file_path'],
+            index=idx
         )
+        snippet.page_content = snippet_summary
 
-    return document_snippets
+    snippets.insert(0, document)
+    return snippets
 
 
 async def split_documents(
@@ -137,6 +147,7 @@ def merge_readmes(readme, other_readmes):
 def find_readme(documents: List[Document]) -> Document:
     other_readmes = []
     root_readme = None
+
     for index, document in enumerate(documents):
 
         if document.metadata['file_path'].lower() == 'readme.md':
