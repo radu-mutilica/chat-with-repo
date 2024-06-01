@@ -28,5 +28,8 @@ async def perform(task: ProxyLLMTask, client: httpx.AsyncClient) -> CompletionRe
         return raw_response['choices'][0]['message']['content']
     except httpx.HTTPError as exc:
         logger.error(f"HTTP Exception for {exc.request.url} - {exc}")
+        logger.debug(f"Info about payload: \n{payload}")
+        for idx, message in enumerate(payload['messages']):
+            logger.debug(f'Message #{idx}: size of {message["role"]} prompt: {len(message["content"])}')
         raise
 

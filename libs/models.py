@@ -60,8 +60,7 @@ class QueryPrompts(BaseModel):
     system: str
 
     def api_format(self):
-        logger.info(f"system prompt length {len(self.system)}")
-        logger.info(f"user prompt length {len(self.user)}")
+
         return [
             {
                 'role': 'system',
