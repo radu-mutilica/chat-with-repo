@@ -47,7 +47,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
             context=context
         )
 
-        logger.debug(f"Context generated:\n{context}")
+        logger.debug(f"Context generated length={len(context)}:\n{context}")
 
         response = await perform(question_task, client)
 
