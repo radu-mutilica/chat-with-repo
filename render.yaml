@@ -92,6 +92,8 @@ services:
     repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
     envVars:
+      - key: LOG_LEVEL
+        value: DEBUG
       - key: GITHUB_URL
         value: https://github.com/corcel-api/vision-workers
       - key: CHROMA_COLLECTION
