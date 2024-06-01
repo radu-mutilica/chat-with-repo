@@ -1,7 +1,10 @@
+import logging
 from typing import List, Optional, Dict, Any
 
 from langchain_core.documents import Document
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class Repo(BaseModel):
@@ -57,6 +60,8 @@ class QueryPrompts(BaseModel):
     system: str
 
     def api_format(self):
+        logger.info(f"system prompt length {len(self.system)}")
+        logger.info(f"user prompt length {len(self.user)}")
         return [
             {
                 'role': 'system',
