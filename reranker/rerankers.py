@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-import typing
+from typing import List, Dict
 
 from sentence_transformers import CrossEncoder
 
@@ -14,7 +14,7 @@ crossencoder_model = CrossEncoder(
 )
 
 
-async def crossencoder(query: str, documents: typing.List[str]):
+async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, str]]:
     """Use a crossencoder model to compute a document rank.
 
     Args:

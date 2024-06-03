@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import List, Dict
 
 from fastapi import FastAPI
 
@@ -25,7 +26,17 @@ models = {
 
 
 @app.post("/rerank")
-async def rerank(request: RequestData):
+async def rerank(request: RequestData) -> List[Dict[str, str]]:
+    """Reranker endpoint. Given a query and a list of documents, it will rerank the documents
+    according to the similarity to the provided query.
+
+    Args:
+        request: (RequestData) the issued request, containing the query and the documents text
+        to rerank.
+
+    Returns:
+        A list of ranks and corpus ids. A cutoff is also enforced.
+    """
     reranker = models[request.model]
     content = request.messages[0].content
 

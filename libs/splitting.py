@@ -35,6 +35,7 @@ vecdb_idx_fmt = "{source}:{index}"
 
 
 def prepare_splitter(language: Language) -> TextSplitter:
+    """Helper function to keep a working list of text splitters."""
     global splitters
 
     if language not in splitters:
@@ -46,7 +47,36 @@ def prepare_splitter(language: Language) -> TextSplitter:
     return splitters[language]
 
 
-async def split_document(document, repo, client) -> List[Document]:
+async def split_document(
+        document: Document,
+        repo: Repo, client:
+        httpx.AsyncClient) -> List[Document]:
+    """Most of the heavy lifting associated with splitting and summarizing files and code snippets.
+    
+    This async func does the following processing steps:
+    
+    - Find the file's extension (to prepare the correct text splitter)
+    - Summarize the file.
+    - Split the file into code chunks.
+    - Summarize each code chunk separately, using context like the aforementioned file summary.
+    - Return the chunks as well as the file.
+    
+    Note:
+        For increased accuracy in final results, we ended up taking the approach of hiding away
+        the raw code in the document's metadata, instead using the summary as the page_content,
+        which is passed to the embedding function.
+        
+        When we build the final context for the prompt, we make sure to insert both snippet
+        summaries as well as raw code.
+    
+    Args:
+        document: (Document) the document to split.
+        repo: (Repo) the repo containing the document.
+        client: (httpx.AsyncClient) the httpx client.
+
+    Returns:
+        A list of documents (chunks).
+    """
     extension = os.path.splitext(document.metadata["source"])[1]
     language = extensions.identify_language(extension)
 
@@ -91,7 +121,7 @@ async def split_document(document, repo, client) -> List[Document]:
                 language=language,
                 file_path=snippet.metadata['file_path'],
                 file_summary=document.page_content,
-                context=build_context(idx, snippets),
+                context=wrap_code_snippet_with_neighbours(idx, snippets),
                 content=snippet.page_content),
             client=client
         )
@@ -115,30 +145,57 @@ async def split_documents(
         repo: Repo,
         client: httpx.AsyncClient
 ) -> List[Document]:
-    snippets = []
+    """Wrapper function for async work"""
+    chunks = []
 
     tasks = [
         split_document(document, repo, client) for document in documents
     ]
 
     for task in asyncio.as_completed(tasks):
-        results = await task
-        snippets.extend(results)
+        chunks.extend(await task)
 
-    return snippets
+    return chunks
 
 
-def build_context(current_index, document_snippets):
-    min_idx = current_index - contextual_window_snippet_radius
+def wrap_code_snippet_with_neighbours(snippet_index: int, code_snippets: List[Document]) -> str:
+    """Given a list of code snippets Documents and the index of one of them, return a string
+    representing the indexed snippet wrapped (prepended and appended) with its immediate
+    neighbours. For example if we have a list [1, 2, 3, 4, 5] and the snippet index is 4, we return
+    the concatenation resulting from snippets 2, 3, 4, and 5. This is used in the summary step
+    for more context about the snippet.
+
+    Args:
+        snippet_index: (int) the index of the snippet to wrap.
+        code_snippets: (list) the list of code snippets in the file.
+
+    Returns:
+        str: the wrapped snippet.
+    """
+    min_idx = snippet_index - contextual_window_snippet_radius
     min_idx = max(0, min_idx)
 
-    max_idx = current_index + contextual_window_snippet_radius
+    max_idx = snippet_index + contextual_window_snippet_radius
 
-    return '\n'.join((doc.page_content for doc in document_snippets[min_idx:max_idx]))
+    return '\n'.join((doc.page_content for doc in code_snippets[min_idx:max_idx]))
 
 
-def merge_readmes(readme, other_readmes):
+def merge_readmes(readme: Document, other_readmes: List[Document]) -> Document:
+    """Given a main Readme.md document, and a list of other readmes found in the repo, check
+    if the main readme file links to or mentions the secondary ones, and if so, insert their
+    contents into the Document.page_content of the main_readme.
+
+    Essentially we are merging together multiple page_contents.
+
+    Args:
+        readme: (Document) the main Readme.md document.
+        other_readmes: (list of Document) a list of other readmes.
+
+    Returns:
+        Document: the merged document.
+    """
     enriched_page_content = readme.page_content
+
     referenced_files = {}
     for line in readme.page_content.splitlines():
         for other_readme in other_readmes:
@@ -152,12 +209,25 @@ def merge_readmes(readme, other_readmes):
                 page_content=other_readme.page_content
             )
 
+    # We store the merged version in the metadata
     readme.metadata['enriched_page_content'] = enriched_page_content
 
     return readme
 
 
 def find_readme(documents: List[Document]) -> Document:
+    """Traverse the list of documents and try to find the main Readme.md file. If the Readme.md file
+    mentions or links to other readme files, be sure to insert them into the page_contents too.
+
+    Args:
+        documents: (list) A list of documents, some of which might be Readme.md files.
+
+    Returns:
+        Document: The main Readme.md file.
+
+    Raises:
+        MissingReadme: If no main Readme.md file is found.
+    """
     other_readmes = []
     root_readme = None
 

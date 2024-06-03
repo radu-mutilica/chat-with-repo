@@ -23,20 +23,14 @@ logger.addHandler(handler)
 github_url = os.environ['GITHUB_URL']
 
 
-def load_repo(url: str, temp_path: str, branch='main') -> Repo:
-    git_loader = GitLoader(clone_url=url, repo_path=temp_path, branch=branch)
-    documents = git_loader.load()
-    repo = Repo(
-        name=url.rsplit('/', maxsplit=1)[-1],
-        branch=branch,
-        url=url,
-        documents=documents,
-        tree=str(Tree(temp_path, absolute=False))
-    )
-    return repo
-
-
 async def main():
+    """Main crawler function.
+
+    This holds most of the crawling logic, while using LLM calls to also summarize various
+    entities (the repo itself, files and code snippets).
+
+    Once crawled and processed, insert everything into a chroma collection.
+    """
     client = httpx.AsyncClient()
     with tempfile.TemporaryDirectory() as local_path:
         logger.info(f'Loading following repository: {github_url} at {local_path}')
@@ -44,7 +38,9 @@ async def main():
         try:
             readme = splitting.find_readme(repo.documents)
         except splitting.MissingReadme:
-            # todo: what do if repo is missing a main readme file?
+            # todo: what do if repo is missing a main readme file? the whole thing revolves
+            # around building context based on the initial repo summary, which might be impossible
+            # without a solid repo readme file
             raise
 
         logger.info(f'Found root readme file {readme.metadata["file_path"]}')
@@ -71,6 +67,20 @@ async def main():
                 ids=[chunk.metadata['vecdb_idx'] for chunk in chunks],
 
             )
+
+
+def load_repo(url: str, temp_path: str, branch='main') -> Repo:
+    """Helper function to load a git repo"""
+    git_loader = GitLoader(clone_url=url, repo_path=temp_path, branch=branch)
+    documents = git_loader.load()
+    repo = Repo(
+        name=url.rsplit('/', maxsplit=1)[-1],
+        branch=branch,
+        url=url,
+        documents=documents,
+        tree=str(Tree(temp_path, absolute=False))
+    )
+    return repo
 
 
 if __name__ == '__main__':

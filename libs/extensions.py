@@ -28,4 +28,5 @@ _language_map = {
 
 
 def identify_language(extension: str) -> Language:
+    """Helper mapper function"""
     return _language_map.get(extension, Language.MARKDOWN)

@@ -29,7 +29,7 @@ services:
       - key: SIM_SEARCH_TOP_K
         value: 25
       - key: LOG_LEVEL
-        value: DEBUG
+        value: INFO
       - key: CHROMA_PASSWORD
         sync: false
       - key: CHROMA_USER
@@ -74,7 +74,7 @@ services:
     plan: pro plus
     envVars:
       - key: LOG_LEVEL
-        value: DEBUG
+        value: INFO
       - key: CROSSENCODER_TOP_K
         value: 5
       - fromGroup: veggie-scout-envs
@@ -95,7 +95,7 @@ services:
     plan: standard
     envVars:
       - key: LOG_LEVEL
-        value: DEBUG
+        value: INFO
       - key: GITHUB_URL
         value: https://github.com/namoray/vision
       - key: CHROMA_COLLECTION
