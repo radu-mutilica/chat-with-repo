@@ -6,10 +6,11 @@ import httpx
 from fastapi import FastAPI, HTTPException, Depends
 from httpx import AsyncClient
 from langchain_core.documents import Document
+from starlette.responses import StreamingResponse
 
 from libs import storage
 from libs.models import RequestData
-from libs.proxies import embeddings, reranker, perform
+from libs.proxies import embeddings, reranker, stream_task
 from libs.proxies.chat import format_context, ChatWithRepo
 
 logger = logging.getLogger()
@@ -51,16 +52,16 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
             client=client
         )
 
-        question_task = ChatWithRepo(
+        chat_with_repo_task = ChatWithRepo(
             question=question,
             context=context
         )
 
         logger.debug(f"Context generated length={len(context)}:\n{context}")
+        # Hardcode this to a streaming response. Once corcel api has support
+        # for standard responses, we can fix this
+        return StreamingResponse(stream_task(chat_with_repo_task))
 
-        response = await perform(question_task, client)
-
-        return response
     except Exception:
         logger.exception('Failed to fulfill request because:')
         raise HTTPException(status_code=500, detail="An error occurred while processing the query")
@@ -92,11 +93,11 @@ async def build_rag_context(
         query_embeddings=search_query_embedding,
         n_results=sim_top_k
     )
+    logger.debug(f'Found {len(sim_vectors)} snippets from sim search. top_k={sim_top_k}')
 
     start = time.time()
     ranks = reranker.rerank(search_query, sim_vectors["documents"][0], client)
     logger.info(f'Got new ranks from reranker, took {round(time.time() - start, 2)}s')
-    logger.debug(f'Found {len(sim_vectors)} snippets from sim search. top_k={sim_top_k}')
 
     documents = []
     for content, metadata in zip(
@@ -105,8 +106,10 @@ async def build_rag_context(
         doc = Document(page_content=content, metadata=metadata)
         documents.append(doc)
 
+    # Select only the top ranked documents
     ranked_snippets = []
-    for rank in await ranks:
+    ranks = await ranks
+    for rank in ranks:
         ranked_snippets.append(
             documents[int(rank['corpus_id'])],
         )

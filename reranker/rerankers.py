@@ -14,7 +14,7 @@ crossencoder_model = CrossEncoder(
 )
 
 
-async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, str]]:
+async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, int|float]]:
     """Use a crossencoder model to compute a document rank.
 
     Args:
@@ -35,9 +35,5 @@ async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, str]]
         f'Crossencoder dropped {len(documents) - len(ranks)} docs after applying '
         f'a top_k={crossencoder_top_k}'
     )
-
-    # Cast to float since, in FastAPI's opinion, numpy.float32 are not serializable
-    for rank in ranks:
-        rank['score'] = float(rank['score'])
 
     return ranks

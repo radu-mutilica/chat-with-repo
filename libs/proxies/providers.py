@@ -10,3 +10,12 @@ openai = Provider(
     },
     url='https://api.openai.com/v1'
 )
+
+corcel_vision = Provider(
+    name='corcel-vision',
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {os.environ['CORCEL_API_KEY']}"
+    },
+    url='https://api.corcel.io/v1'
+)

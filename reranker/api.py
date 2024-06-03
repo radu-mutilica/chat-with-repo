@@ -4,7 +4,7 @@ from typing import List, Dict
 
 from fastapi import FastAPI
 
-from libs.models import RequestData
+from libs.models import RequestData, DocumentRank
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler = logging.StreamHandler()
@@ -26,7 +26,7 @@ models = {
 
 
 @app.post("/rerank")
-async def rerank(request: RequestData) -> List[Dict[str, str]]:
+async def rerank(request: RequestData) -> List[DocumentRank]:
     """Reranker endpoint. Given a query and a list of documents, it will rerank the documents
     according to the similarity to the provided query.
 
@@ -47,4 +47,4 @@ async def rerank(request: RequestData) -> List[Dict[str, str]]:
     )
     logger.debug(f"New ranks generated in {round(time.time() - start, 2)}s: {ranks}")
 
-    return ranks
+    return [DocumentRank.parse_obj(rank) for rank in ranks]

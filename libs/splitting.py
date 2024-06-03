@@ -9,7 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitte
 
 from libs import extensions
 from libs.models import Repo
-from libs.proxies import summaries, perform
+from libs.proxies import summaries, perform_task
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ async def split_document(
     extension = os.path.splitext(document.metadata["source"])[1]
     language = extensions.identify_language(extension)
 
-    file_summary = perform(
+    file_summary = perform_task(
         summaries.SummarizeFile(
             repo_name=repo.name,
             repo_summary=repo.metadata['summary'],
@@ -113,7 +113,7 @@ async def split_document(
 
     for idx, snippet in enumerate(snippets):
         snippet.metadata.update(document.metadata)
-        snippet_summary = perform(
+        snippet_summary = perform_task(
             summaries.SummarizeSnippet(
                 repo_name=repo.name,
                 repo_summary=repo.metadata['summary'],

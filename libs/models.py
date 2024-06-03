@@ -60,7 +60,6 @@ class QueryPrompts(BaseModel):
     system: str
 
     def api_format(self):
-
         return [
             {
                 'role': 'system',
@@ -138,3 +137,9 @@ class ProxyLLMTask:
     @property
     def prompts(self):
         return self._prompts
+
+
+class DocumentRank(BaseModel):
+    corpus_id: int
+    score: float
+

@@ -9,6 +9,7 @@ RERANKER_HEADERS = {
 
 
 async def rerank(query: str, documents: List[str], client: AsyncClient):
+    """Helper function to build a payload and rerank some documents"""
     payload = {
         "model": "crossencoder",
         "messages": [

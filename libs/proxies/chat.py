@@ -1,7 +1,11 @@
-from libs.models import Model, ProxyLLMTask
-from libs.proxies.providers import openai
+from typing import List
 
-chat = Model(name='gpt-3.5-turbo', provider=openai, endpoint='chat/completions')
+from langchain_core.documents import Document
+
+from libs.models import Model, ProxyLLMTask
+from libs.proxies.providers import corcel_vision
+
+chat = Model(name='llama-3', provider=corcel_vision, endpoint='text/vision/chat')
 
 _assistant_prefix = """You are an expert programming assistant. You provide concise, informative 
 and friendly answers to questions you are given. Your task is to """
@@ -42,22 +46,29 @@ class ChatWithRepo(ProxyLLMTask):
     Question:
     
     {question}
-    
-    ```"""
+    """
 
 
-def format_context(contextual_chunks):
+def format_context(contextual_chunks: List[Document]) -> str:
+    """Format the context template to pass to the final llm prompt
+
+    Args:
+        contextual_chunks: (List[Document]) a list of contextually related documents.
+
+    Returns:
+        str: the context.
+    """
     context = ''
 
-    files, code_chunks = [], []
+    entire_files, isolated_code_chunks = [], []
 
     for document in contextual_chunks:
         if document.metadata['source'].endswith('main'):
-            files.append(document)
+            entire_files.append(document)
         else:
-            code_chunks.append(document)
+            isolated_code_chunks.append(document)
 
-    for file in files:
+    for file in entire_files:
         context += contextual_file_fmt.format(
             path=file.metadata['file_path'],
             summary=file.page_content,
@@ -65,7 +76,7 @@ def format_context(contextual_chunks):
         context += '\n'
         context += prompt_separator
 
-    for code_chunk in code_chunks:
+    for code_chunk in isolated_code_chunks:
         context += contextual_code_fmt.format(
             path=code_chunk.metadata['file_path'],
             summary=code_chunk.page_content,

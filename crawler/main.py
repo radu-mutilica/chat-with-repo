@@ -10,7 +10,7 @@ from langchain_community.document_loaders import GitLoader
 import db
 from libs import splitting
 from libs.models import Repo
-from libs.proxies import perform, summaries
+from libs.proxies import perform_task, summaries
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
@@ -49,7 +49,7 @@ async def main():
             repo_name=repo.name,
             tree=repo.tree,
         )
-        repo_summary = await perform(repo_summary_task, client)
+        repo_summary = await perform_task(repo_summary_task, client)
         logger.info(f'Summarized repo summary task: {repo_summary}')
 
         repo.metadata['summary'] = repo_summary

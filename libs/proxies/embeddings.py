@@ -9,6 +9,7 @@ embeddings = Model(name='text-embedding-3-small', provider=openai, endpoint='emb
 
 
 async def generate_embedding(search_string: str, client: httpx.AsyncClient) -> List[float]:
+    """Helper func to create a payload and generate an embedding"""
     payload = {
         "model": embeddings.name,
         "input": [search_string]
