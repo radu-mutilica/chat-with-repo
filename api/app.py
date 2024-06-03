@@ -10,9 +10,8 @@ from starlette.responses import StreamingResponse
 
 from libs import storage
 from libs.models import RequestData
-from libs.proxies import embeddings, reranker, stream_task, perform_task
+from libs.proxies import embeddings, reranker, stream_task
 from libs.proxies.chat import format_context, ChatWithRepo
-from libs.proxies.query_inspector import QueryInspector
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
