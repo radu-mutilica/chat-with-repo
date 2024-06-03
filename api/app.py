@@ -48,10 +48,11 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         query = request.messages[0].content
 
         # Commented this out since the model used for answering the question is
+        # pretty good at detecting 'erroneous' user input
+        #
         # query_inspector_task = QueryInspector(
         #     user_input=query
         # )
-        # pretty good at detecting 'erroneous' user input
         # query_inspector_response = await perform_task(task=query_inspector_task, client=client)
         # assert query_inspector_response.strip() == 'TRUE', 'Invalid user query'
 
