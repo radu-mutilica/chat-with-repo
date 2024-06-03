@@ -10,8 +10,9 @@ from starlette.responses import StreamingResponse
 
 from libs import storage
 from libs.models import RequestData
-from libs.proxies import embeddings, reranker, stream_task
+from libs.proxies import embeddings, reranker, stream_task, perform_task
 from libs.proxies.chat import format_context, ChatWithRepo
+from libs.proxies.query_inspector import QueryInspector
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
@@ -44,16 +45,24 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        question = request.messages[0].content
+        query = request.messages[0].content
+
+        # Commented this out since the model used for answering the question is
+        # query_inspector_task = QueryInspector(
+        #     user_input=query
+        # )
+        # pretty good at detecting 'erroneous' user input
+        # query_inspector_response = await perform_task(task=query_inspector_task, client=client)
+        # assert query_inspector_response.strip() == 'TRUE', 'Invalid user query'
 
         context = await build_rag_context(
-            search_query=question,
+            search_query=query,
             sim_top_k=sim_search_top_k,
             client=client
         )
 
         chat_with_repo_task = ChatWithRepo(
-            question=question,
+            question=query,
             context=context
         )
 
