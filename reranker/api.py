@@ -1,8 +1,13 @@
 import logging
+import os
 import time
-from typing import List, Dict
+from contextlib import asynccontextmanager
+from typing import List
 
-from fastapi import FastAPI
+import redis.asyncio as redis
+from fastapi import FastAPI, Depends
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 
 from libs.models import RequestData, DocumentRank
 
@@ -18,14 +23,23 @@ logger.setLevel(logging.DEBUG)
 # preconfigured logging for the sentence_transformers package
 import rerankers
 
-app = FastAPI()
-
-models = {
-    'crossencoder': rerankers.crossencoder
-}
+redis_url = os.environ['REDIS_URL']
+models = {'crossencoder': rerankers.crossencoder}
 
 
-@app.post("/rerank")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Simple rate limiting layer"""
+    redis_connection = redis.from_url(redis_url, encoding="utf8")
+    await FastAPILimiter.init(redis_connection)
+    yield
+    await FastAPILimiter.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/rerank", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
 async def rerank(request: RequestData) -> List[DocumentRank]:
     """Reranker endpoint. Given a query and a list of documents, it will rerank the documents
     according to the similarity to the provided query.

@@ -69,12 +69,17 @@ services:
     name: reranker
     runtime: docker
     repo: https://github.com/radu-mutilica/chat-with-repo
-    plan: pro plus
+    plan: standard
     envVars:
       - key: LOG_LEVEL
         value: INFO
       - key: CROSSENCODER_TOP_K
         value: 5
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          type: pserv
+          property: connectionString
       - fromGroup: veggie-scout-envs
     region: frankfurt
     dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
@@ -120,5 +125,11 @@ services:
       ignoredPaths:
         - api/**
         - reranker/**
+
+  - type: redis
+    plan: standard
+    name: private redis
+    region: frankfurt
+    ipAllowList: [] # Only allow internal connections
 
 version: "1"

@@ -75,7 +75,10 @@ services:
           target: /app/libs
     environment:
       CROSSENCODER_TOP_K: "5"
-
+      REDIS_URL: "redis://redis:6379"
+    depends_on:
+      - chromadb
+      - redis
     networks:
       - net
     links:
@@ -93,6 +96,15 @@ services:
       IS_PERSISTENT: "TRUE"
       ANONYMIZED_TELEMETRY: "FALSE"
       CHROMA_STORAGE_PATH: ""
+    networks:
+      - net
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
     networks:
       - net
 

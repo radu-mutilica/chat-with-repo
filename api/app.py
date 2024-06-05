@@ -4,7 +4,7 @@ import time
 
 import httpx
 from fastapi import FastAPI, HTTPException, Depends
-from httpx import AsyncClient
+from httpx import AsyncClient, HTTPStatusError, HTTPError
 from langchain_core.documents import Document
 from starlette.responses import StreamingResponse
 
@@ -74,6 +74,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         # Hardcode this to a streaming response. Once corcel api has support
         # for standard responses, we can fix this
         return StreamingResponse(stream_task(chat_with_repo_task))
+
     except AssertionError:
         raise HTTPException(status_code=400, detail="Not a valid repository")
 
