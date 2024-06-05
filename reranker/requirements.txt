@@ -4,5 +4,3 @@ sentence-transformers~=3.0.0
 langchain-core~=0.2.0
 langchain-text-splitters~=0.2.0
 langchain-community~=0.2.0
-fastapi-limiter~=0.1.6
-redis~=5.0.4

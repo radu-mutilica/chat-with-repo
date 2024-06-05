@@ -1,9 +1,13 @@
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 
 import httpx
+import redis
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 from httpx import AsyncClient
 from langchain_core.documents import Document
 from starlette.responses import StreamingResponse
@@ -23,6 +27,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 sim_search_top_k = int(os.environ['SIM_SEARCH_TOP_K'])
+redis_url = os.environ['REDIS_URL']
 
 app = FastAPI()
 
@@ -33,7 +38,16 @@ async def get_client():
         yield client
 
 
-@app.post("/chat/")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Simple rate limiting layer"""
+    redis_connection = redis.from_url(redis_url, encoding="utf8")
+    await FastAPILimiter.init(redis_connection)
+    yield
+    await FastAPILimiter.close()
+
+
+@app.post("/chat/", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
 async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get_client)):
     """Endpoint for chatting with your repo.
 
