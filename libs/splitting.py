@@ -243,6 +243,12 @@ def find_readme(documents: List[Document]) -> Document:
     if root_readme:
         if other_readmes:
             root_readme = merge_readmes(root_readme, other_readmes)
+        else:
+            # Regardless of whether we "enrich" the main readme, we still need
+            # to copy its contents to metadata as well, so we don't have separate
+            # flows later down the pipeline
+            root_readme.metadata['enriched_page_content'] = root_readme.page_content
+
 
     else:
         raise MissingReadme('no main readme file found')

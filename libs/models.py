@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
 from langchain_core.documents import Document
 from pydantic import BaseModel
@@ -113,9 +113,19 @@ def to_snippets(distances, documents, ids, metadatas, **_):
     return snippets
 
 
+class RankContent(BaseModel):
+    query: str
+    documents: List[str]
+
+
+class ChatContent(BaseModel):
+    query: str
+    repo: str
+
+
 class Message(BaseModel):
     role: str = 'user'
-    content: Any
+    content: ChatContent | RankContent
 
 
 class RequestData(BaseModel):
@@ -142,4 +152,3 @@ class ProxyLLMTask:
 class DocumentRank(BaseModel):
     corpus_id: int
     score: float
-

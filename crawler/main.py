@@ -8,6 +8,7 @@ from directory_structure import Tree
 from langchain_community.document_loaders import GitLoader
 
 import db
+from libs import crawl_targets
 from libs import splitting
 from libs.models import Repo
 from libs.proxies import perform_task, summaries
@@ -20,10 +21,8 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-github_url = os.environ['GITHUB_URL']
 
-
-async def main():
+async def crawl_repo(github_url: str, subnet_name: str) -> None:
     """Main crawler function.
 
     This holds most of the crawling logic, while using LLM calls to also summarize various
@@ -60,7 +59,7 @@ async def main():
         )
         logger.info(f'Found {len(chunks)} chunks')
         with db.VectorDBCollection(
-                collection_name=os.environ['CHROMA_COLLECTION']) as vecdb_client:
+                collection_name=subnet_name) as vecdb_client:
             vecdb_client.add(
                 documents=[chunk.page_content for chunk in chunks],
                 metadatas=[chunk.metadata for chunk in chunks],
@@ -83,6 +82,16 @@ def load_repo(url: str, temp_path: str, branch='main') -> Repo:
     return repo
 
 
+async def crawl(targets):
+    """Helper function to create all crawling tasks (one per repo defined in the yaml file)"""
+    tasks = [
+        asyncio.create_task(crawl_repo(github_url, subnet_name))
+        for subnet_name, github_url in targets.items()
+    ]
+
+    await asyncio.gather(*tasks)
+
+
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(crawl(crawl_targets))

@@ -29,7 +29,7 @@ prompt_separator = "-" * 10
 
 class ChatWithRepo(ProxyLLMTask):
     model = chat
-    system_prompt = _assistant_prefix + """answer a question asked about a GitHub repository. 
+    system_prompt = _assistant_prefix + """answer a question about a GitHub repository. 
     Using the provided contextual code fragments and documentation provided. You will not make 
     any assumptions about the codebase beyond what is presented to you as context.
 

@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from langchain_core.documents import Document
 from starlette.responses import StreamingResponse
 
+from libs import crawl_targets
 from libs import storage
 from libs.models import RequestData
 from libs.proxies import embeddings, reranker, stream_task
@@ -21,7 +22,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-collection_name = os.environ['CHROMA_COLLECTION']
 sim_search_top_k = int(os.environ['SIM_SEARCH_TOP_K'])
 
 app = FastAPI()
@@ -44,7 +44,10 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        query = request.messages[0].content
+        data = request.messages[0].content
+        query, repo = data.query, data.repo
+
+        assert repo in crawl_targets, "Not a valid repo"
 
         # Commented this out since the model used for answering the question is
         # pretty good at detecting 'erroneous' user input
@@ -56,6 +59,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         # assert query_inspector_response.strip() == 'TRUE', 'Invalid user query'
 
         context = await build_rag_context(
+            repo=repo,
             search_query=query,
             sim_top_k=sim_search_top_k,
             client=client
@@ -70,6 +74,8 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         # Hardcode this to a streaming response. Once corcel api has support
         # for standard responses, we can fix this
         return StreamingResponse(stream_task(chat_with_repo_task))
+    except AssertionError:
+        raise HTTPException(status_code=400, detail="Not a valid repository")
 
     except Exception:
         logger.exception('Failed to fulfill request because:')
@@ -77,6 +83,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
 
 async def build_rag_context(
+        repo: str,
         search_query: str,
         sim_top_k: int,
         client: httpx.AsyncClient) -> str:
@@ -86,6 +93,7 @@ async def build_rag_context(
     a prompt template.
 
     Args:
+        repo: (str) the name of the repo to build the context around
         search_query: (str) the user's search query.
         sim_top_k: (int) the top_k for the sim search.
         client: (httpx.AsyncClient) the httpx client.
@@ -97,8 +105,8 @@ async def build_rag_context(
     search_query_embedding = await embeddings.generate_embedding(search_query, client)
     logger.info(f'Got embedding for user search query, took {round(time.time() - start, 2)}s')
 
-    logger.info(f'Searching collection {collection_name}')
-    sim_vectors = storage.get_db(collection_name).query(
+    logger.info(f'Searching collection {repo}')
+    sim_vectors = storage.get_db(repo).query(
         query_embeddings=search_query_embedding,
         n_results=sim_top_k
     )

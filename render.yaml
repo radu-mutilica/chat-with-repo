@@ -34,8 +34,6 @@ services:
         sync: false
       - key: CHROMA_USER
         sync: false
-      - key: CHROMA_COLLECTION
-        value: chat-with-repo
       - key: CHROMA_HOST
         fromService:
           name: chroma
@@ -98,8 +96,6 @@ services:
         value: INFO
       - key: GITHUB_URL
         value: https://github.com/namoray/vision
-      - key: CHROMA_COLLECTION
-        value: chat-with-repo
       - key: CHROMA_NAME
         value: chromadb
       - key: CHROMA_HOST
