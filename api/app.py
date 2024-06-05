@@ -4,7 +4,7 @@ import time
 
 import httpx
 from fastapi import FastAPI, HTTPException, Depends
-from httpx import AsyncClient, HTTPStatusError, HTTPError
+from httpx import AsyncClient
 from langchain_core.documents import Document
 from starlette.responses import StreamingResponse
 

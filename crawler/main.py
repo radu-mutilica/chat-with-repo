@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import tempfile
+from urllib.parse import urlparse
 
 import httpx
 from directory_structure import Tree
@@ -21,6 +22,14 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
+github_api_url = 'https://api.github.com/repos/{owner}/{repo}'
+github_access_token = os.environ['GITHUB_API_KEY']
+github_api_headers = {
+    "Authorization": f"token {github_access_token}"
+}
+
+timeout = httpx.Timeout(15.0, read=None)
+
 
 async def crawl_repo(github_url: str, subnet_name: str) -> None:
     """Main crawler function.
@@ -33,7 +42,7 @@ async def crawl_repo(github_url: str, subnet_name: str) -> None:
     client = httpx.AsyncClient()
     with tempfile.TemporaryDirectory() as local_path:
         logger.info(f'Loading following repository: {github_url} at {local_path}')
-        repo = load_repo(github_url, local_path, branch="main")
+        repo = await load_repo(github_url, local_path, client)
         try:
             readme = splitting.find_readme(repo.documents)
         except splitting.MissingReadme:
@@ -68,10 +77,40 @@ async def crawl_repo(github_url: str, subnet_name: str) -> None:
             )
 
 
-def load_repo(url: str, temp_path: str, branch='main') -> Repo:
+async def get_default_branch(repo_url: str, client: httpx.AsyncClient) -> str:
+    """Helper function to figure out the default branch for a repo"""
+    parsed_url = urlparse(repo_url)
+    path_parts = parsed_url.path.strip('/').split('/')
+
+    if len(path_parts) != 2:
+        raise ValueError(f'Invalid GitHub repository URL "{repo_url}"')
+
+    owner, repo = path_parts
+
+    api_url = github_api_url.format(owner=owner, repo=repo)
+
+    response = await client.get(api_url, headers=github_api_headers, timeout=timeout)
+
+    response.raise_for_status()
+    repo_info = response.json()
+    default_branch = repo_info['default_branch']
+    logger.info(f'Repo: {repo_url} found default branch: {default_branch}')
+
+    return default_branch
+
+
+async def load_repo(url: str, temp_path: str, client: httpx.AsyncClient) -> Repo:
     """Helper function to load a git repo"""
-    git_loader = GitLoader(clone_url=url, repo_path=temp_path, branch=branch)
+    branch = await get_default_branch(url, client)
+
+    git_loader = GitLoader(
+        clone_url=url,
+        repo_path=temp_path,
+        branch=branch
+    )
+
     documents = git_loader.load()
+
     repo = Repo(
         name=url.rsplit('/', maxsplit=1)[-1],
         branch=branch,

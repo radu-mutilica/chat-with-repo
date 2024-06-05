@@ -1,13 +1,16 @@
+import asyncio
 import logging
 from typing import AsyncGenerator
 
 import httpx
+from aiolimiter import AsyncLimiter
 
 from libs.models import ProxyLLMTask
 
-timeout = httpx.Timeout(15.0, read=None)
+timeout = httpx.Timeout(20, read=None)
 
 logger = logging.getLogger(__name__)
+rate_limiter = AsyncLimiter(10, 1)
 
 
 async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
@@ -24,23 +27,45 @@ async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
         "model": task.model.name,
         "messages": task.prompts.api_format()
     }
-    try:
-        response = await client.post(
-            url=task.model.url,
-            json=payload,
-            headers=task.model.provider.headers,
-            timeout=timeout)
+    async with rate_limiter:
+        try:
+            response = await client.post(
+                url=task.model.url,
+                json=payload,
+                headers=task.model.provider.headers,
+                timeout=timeout
+            )
 
-        response.raise_for_status()
-        raw_response = response.json()
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After")
+                if retry_after:
+                    wait_time = int(retry_after)
+                    logger.error(f"Rate limit exceeded. Retrying after {wait_time} seconds...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    # If no Retry-After header, wait a default time
+                    logger.error("Rate limit exceeded. Retrying after 60 seconds...")
+                    await asyncio.sleep(60)
 
-        return raw_response['choices'][0]['message']['content']
-    except httpx.HTTPError as exc:
-        logger.error(f"HTTP Exception for {exc.request.url} - {exc}")
-        logger.debug(f"Payload: \n{payload}")
-        for idx, message in enumerate(payload['messages']):
-            logger.debug(f'Msg #{idx}: size of {message["role"]} prompt: {len(message["content"])}')
-        raise
+                response = await client.post(
+                    url=task.model.url,
+                    json=payload,
+                    headers=task.model.provider.headers,
+                    timeout=timeout
+                )
+                response.raise_for_status()
+                return response.json()['choices'][0]['message']['content']
+            else:
+                response.raise_for_status()
+                raw_response = response.json()
+
+            return raw_response['choices'][0]['message']['content']
+        except httpx.HTTPError as exc:
+            logger.error(f"HTTP Exception for {exc.request.url} - {exc}")
+            logger.debug(f"Payload: \n{payload}")
+            for idx, message in enumerate(payload['messages']):
+                logger.debug(f'Msg #{idx}: size of {message["role"]} prompt: {len(message["content"])}')
+            raise
 
 
 async def stream_task(task: ProxyLLMTask) -> AsyncGenerator:

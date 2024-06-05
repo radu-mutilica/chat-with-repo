@@ -99,6 +99,8 @@ services:
     envVars:
       - key: LOG_LEVEL
         value: INFO
+      - key: GITHUB_API_KEY
+        sync: false
       - key: GITHUB_URL
         value: https://github.com/namoray/vision
       - key: CHROMA_NAME
