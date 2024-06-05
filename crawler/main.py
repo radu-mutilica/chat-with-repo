@@ -21,6 +21,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 github_url = os.environ['GITHUB_URL']
+github_branch = os.environ['GITHUB_BRANCH']
 
 
 async def main():
@@ -33,8 +34,8 @@ async def main():
     """
     client = httpx.AsyncClient()
     with tempfile.TemporaryDirectory() as local_path:
-        logger.info(f'Loading following repository: {github_url} at {local_path}')
-        repo = load_repo(github_url, local_path, branch="main")
+        logger.info(f'Loading following repository: {github_url}:{github_branch} at {local_path}')
+        repo = load_repo(github_url, local_path, branch=github_branch)
         try:
             readme = splitting.find_readme(repo.documents)
         except splitting.MissingReadme:
