@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 from libs.models import Model, ProxyLLMTask
 from libs.proxies.providers import corcel
 
-chat = Model(name='llama-3', provider=corcel, endpoint='text/vision/chat')
+chat = Model(name='mixtral-8x7b', provider=corcel, endpoint='text/vision/chat')
 
 _assistant_prefix = """You are an expert programming assistant. You provide concise, informative 
 and friendly answers to questions you are given. Your task is to """
