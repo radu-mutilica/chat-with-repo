@@ -4,7 +4,7 @@ import os
 import tempfile
 
 import httpx
-from directory_structure import Tree
+from directory_tree import display_tree
 from langchain_community.document_loaders import GitLoader
 
 import db
@@ -72,14 +72,21 @@ async def main():
 
 def load_repo(url: str, temp_path: str, branch='main') -> Repo:
     """Helper function to load a git repo"""
-    git_loader = GitLoader(clone_url=url, repo_path=temp_path, branch=branch)
+    name = url.rsplit('/', maxsplit=1)[-1]
+    root_path = f'{temp_path}/{name}'
+
+    os.makedirs(root_path)
+
+    git_loader = GitLoader(clone_url=url, repo_path=root_path, branch=branch)
     documents = git_loader.load()
+    tree = display_tree(root_path, string_rep=True)
+
     repo = Repo(
-        name=url.rsplit('/', maxsplit=1)[-1],
+        name=name,
         branch=branch,
         url=url,
         documents=documents,
-        tree=str(Tree(temp_path, absolute=False))
+        tree=tree,
     )
     return repo
 

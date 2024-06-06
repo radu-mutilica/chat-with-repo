@@ -27,7 +27,7 @@ services:
     plan: standard
     envVars:
       - key: SIM_SEARCH_TOP_K
-        value: 25
+        value: 35
       - key: LOG_LEVEL
         value: INFO
       - key: CHROMA_PASSWORD
@@ -76,7 +76,7 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: CROSSENCODER_TOP_K
-        value: 5
+        value: 7
       - fromGroup: veggie-scout-envs
     region: frankfurt
     dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
