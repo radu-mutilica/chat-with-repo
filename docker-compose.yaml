@@ -17,6 +17,7 @@ services:
     container_name: api
     environment:
       SIM_SEARCH_TOP_K: "35"
+      REDIS_URL: "redis://redis:6379"
       CHROMA_HOST: "chromadb"
       CHROMA_PORT: "8000"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
@@ -27,6 +28,7 @@ services:
       LOG_LEVEL: "DEBUG"
     depends_on:
       - chromadb
+      - redis
     networks:
       - net
 
@@ -96,6 +98,15 @@ services:
       IS_PERSISTENT: "TRUE"
       ANONYMIZED_TELEMETRY: "FALSE"
       CHROMA_STORAGE_PATH: ""
+    networks:
+      - net
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
     networks:
       - net
 

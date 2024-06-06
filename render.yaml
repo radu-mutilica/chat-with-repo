@@ -36,6 +36,11 @@ services:
         sync: false
       - key: CHROMA_COLLECTION
         value: chat-with-repo
+      - key: REDIS_URL
+        fromService:
+          name: redis
+          type: pserv
+          property: connectionString
       - key: CHROMA_HOST
         fromService:
           name: chroma
@@ -71,7 +76,7 @@ services:
     name: reranker
     runtime: docker
     repo: https://github.com/radu-mutilica/chat-with-repo
-    plan: pro plus
+    plan: standard
     envVars:
       - key: LOG_LEVEL
         value: INFO
@@ -126,5 +131,11 @@ services:
       ignoredPaths:
         - api/**
         - reranker/**
+
+  - type: redis
+    plan: standard
+    name: private redis
+    region: frankfurt
+    ipAllowList: [] # Only allow internal connections
 
 version: "1"

@@ -1,9 +1,13 @@
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 
 import httpx
+import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 from httpx import AsyncClient
 from langchain_core.documents import Document
 from starlette.responses import StreamingResponse
@@ -23,8 +27,19 @@ logger.addHandler(handler)
 
 collection_name = os.environ['CHROMA_COLLECTION']
 sim_search_top_k = int(os.environ['SIM_SEARCH_TOP_K'])
+redis_url = os.environ['REDIS_URL']
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Simple rate limiting layer"""
+    redis_connection = redis.from_url(redis_url, encoding="utf8")
+    await FastAPILimiter.init(redis_connection)
+    yield
+    await FastAPILimiter.close()
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 async def get_client():
@@ -33,7 +48,7 @@ async def get_client():
         yield client
 
 
-@app.post("/chat/")
+@app.post("/chat/", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
 async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get_client)):
     """Endpoint for chatting with your repo.
 
@@ -67,7 +82,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         )
 
         logger.debug(f"Context generated length={len(context)}:\n{context}")
-        # Hardcode this to a streaming response. Once corcel api has support
+        # Hardcode this to a streaming response. Once this model has support
         # for standard responses, we can fix this
         return StreamingResponse(stream_task(chat_with_repo_task))
 
@@ -104,39 +119,18 @@ async def build_rag_context(
     )
     logger.debug(f'Found {len(sim_vectors)} snippets from sim search. top_k={sim_top_k}')
 
-    # # Filter out any duplicated code snippets (if we already embed the parent file, no need
-    # # to also embed and repeat any of its code snippets)
-    # referenced_files = [
-    #     m['file_path'] for m in sim_vectors['metadatas'][0]
-    #     if m['vecdb_idx'].endswith('main')
-    # ]
-    #
-    # filtered_metadatas, filtered_documents = [], []
-    # skipped_docs = 0
-    # for meta, doc in zip(sim_vectors['metadatas'][0], sim_vectors['documents'][0]):
-    #     if not meta['vecdb_idx'].endswith('main') and meta['file_path'] not in referenced_files:
-    #         filtered_metadatas.append(meta)
-    #
-    #         filtered_documents.append(doc)
-    #     else:
-    #         skipped_docs += 1
-    #         logger.debug(f'Skipping metadata={meta} in context. Already referenced entire file')
-    #
-    # if skipped_docs:
-    #     logger.debug(f'Skipped {skipped_docs} documents to deduplicate context')
-
     start = time.time()
     ranks = reranker.rerank(search_query, sim_vectors["documents"][0], client)
     logger.info(f'Got new ranks from reranker, took {round(time.time() - start, 2)}s')
 
+    # Build a list with only the ranked documents, these are the final ones that
+    # are used for formatting the RAG context
     documents = []
     for content, metadata in zip(
             sim_vectors["documents"][0],
             sim_vectors["metadatas"][0]):
         doc = Document(page_content=content, metadata=metadata)
         documents.append(doc)
-
-    # Select only the top ranked documents
     ranked_snippets = []
     ranks = await ranks
     for rank in ranks:
