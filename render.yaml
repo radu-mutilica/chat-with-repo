@@ -37,9 +37,8 @@ services:
       - key: CHROMA_COLLECTION
         value: chat-with-repo
       - key: REDIS_URL
-        fromService:
+        fromDatabase:
           name: redis
-          type: pserv
           property: connectionString
       - key: CHROMA_HOST
         fromService:
