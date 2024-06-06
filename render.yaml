@@ -134,7 +134,7 @@ services:
 
   - type: redis
     plan: standard
-    name: redis
+    name: private redis
     region: frankfurt
     ipAllowList: [] # Only allow internal connections
 
