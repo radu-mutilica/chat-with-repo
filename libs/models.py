@@ -127,6 +127,7 @@ class ProxyLLMTask:
     system_prompt = ''
     user_prompt = ''
     model = None
+    extra_settings = None
 
     def __init__(self, **kwargs):
         system_prompt = self.system_prompt.format(**kwargs)

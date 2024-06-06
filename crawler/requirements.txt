@@ -9,3 +9,4 @@ langchain-community~=0.2.0
 sentence-transformers~=3.0.0
 chromadb-client~=0.4.25.dev0
 openai~=1.30.5
+aiolimiter~=1.1.0

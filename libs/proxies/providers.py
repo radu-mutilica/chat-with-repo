@@ -11,7 +11,7 @@ openai = Provider(
     url='https://api.openai.com/v1'
 )
 
-corcel_vision = Provider(
+corcel = Provider(
     name='corcel-vision',
     headers={
         "Content-Type": "application/json",

@@ -1,13 +1,22 @@
 from libs.models import Model, ProxyLLMTask
-from libs.proxies.providers import openai
+from libs.proxies.providers import corcel
 
 _assistant_prefix = """You are an expert programming assistant. You provide concise, informative 
 and friendly answers to questions you are given. Your task is to """
 
-summaries = Model(name='gpt-3.5-turbo', provider=openai, endpoint='chat/completions')
+summaries = Model(name='gpt-3.5-turbo', provider=corcel, endpoint='text/cortext/chat')
 
 
-class SummarizeRepo(ProxyLLMTask):
+class SummaryTask(ProxyLLMTask):
+    extra_settings = {
+        "stream": False,
+        "top_p": 1,
+        "temperature": 0.0001,
+        "max_tokens": 4096
+    }
+
+
+class SummarizeRepo(SummaryTask):
     model = summaries
     system_prompt = _assistant_prefix + """ come up with a description of what you believe a
     github repository does. For context, you will be given the repository's Readme, as well
@@ -28,7 +37,7 @@ class SummarizeRepo(ProxyLLMTask):
     is structured."""
 
 
-class SummarizeFile(ProxyLLMTask):
+class SummarizeFile(SummaryTask):
     model = summaries
 
     system_prompt = _assistant_prefix + """come up with a description of what you believe a file 
@@ -62,7 +71,7 @@ class SummarizeFile(ProxyLLMTask):
     """
 
 
-class SummarizeSnippet(ProxyLLMTask):
+class SummarizeSnippet(SummaryTask):
     model = summaries
 
     system_prompt = _assistant_prefix + """come up with a description of a short code snippet, from

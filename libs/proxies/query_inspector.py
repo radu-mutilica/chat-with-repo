@@ -1,10 +1,10 @@
 from libs.models import ProxyLLMTask, Model
-from libs.proxies.providers import openai
+from libs.proxies.providers import corcel
 
 _assistant_prefix = """You are a helpful little robot able to infer human natural language 
 intents. Your job is to """
 
-query_analyzer = Model(name='gpt-3.5-turbo', provider=openai, endpoint='chat/completions')
+query_analyzer = Model(name='claude-3-opus-20240229', provider=corcel, endpoint='text/cortext/chat')
 
 
 class QueryInspector(ProxyLLMTask):
