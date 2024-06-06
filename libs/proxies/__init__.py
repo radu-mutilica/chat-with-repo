@@ -9,7 +9,7 @@ from libs.models import ProxyLLMTask
 
 logger = logging.getLogger(__name__)
 timeout = httpx.Timeout(20, read=None)
-rate_limiter = AsyncLimiter(5, 1)
+rate_limiter = AsyncLimiter(3, 1)
 
 
 async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
