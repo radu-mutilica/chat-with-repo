@@ -106,6 +106,7 @@ async def split_document(
         document.page_content = ''
 
     document.metadata['language'] = language
+    document.metadata['document_type'] = 'file'
     document.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
         source=document.metadata['file_path'],
         index='main'
@@ -127,6 +128,7 @@ async def split_document(
         )
         # Store the "code" in the metadata
         snippet.metadata['original_page_content'] = snippet.page_content
+        snippet.metadata['document_type'] = 'code'
         snippet.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
             source=document.metadata['file_path'],
             index=idx

@@ -104,6 +104,27 @@ async def build_rag_context(
     )
     logger.debug(f'Found {len(sim_vectors)} snippets from sim search. top_k={sim_top_k}')
 
+    # # Filter out any duplicated code snippets (if we already embed the parent file, no need
+    # # to also embed and repeat any of its code snippets)
+    # referenced_files = [
+    #     m['file_path'] for m in sim_vectors['metadatas'][0]
+    #     if m['vecdb_idx'].endswith('main')
+    # ]
+    #
+    # filtered_metadatas, filtered_documents = [], []
+    # skipped_docs = 0
+    # for meta, doc in zip(sim_vectors['metadatas'][0], sim_vectors['documents'][0]):
+    #     if not meta['vecdb_idx'].endswith('main') and meta['file_path'] not in referenced_files:
+    #         filtered_metadatas.append(meta)
+    #
+    #         filtered_documents.append(doc)
+    #     else:
+    #         skipped_docs += 1
+    #         logger.debug(f'Skipping metadata={meta} in context. Already referenced entire file')
+    #
+    # if skipped_docs:
+    #     logger.debug(f'Skipped {skipped_docs} documents to deduplicate context')
+
     start = time.time()
     ranks = reranker.rerank(search_query, sim_vectors["documents"][0], client)
     logger.info(f'Got new ranks from reranker, took {round(time.time() - start, 2)}s')

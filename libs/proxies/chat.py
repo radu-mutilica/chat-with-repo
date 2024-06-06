@@ -63,7 +63,9 @@ def format_context(contextual_chunks: List[Document]) -> str:
     entire_files, isolated_code_chunks = [], []
 
     for document in contextual_chunks:
-        if document.metadata['source'].endswith('main'):
+        # TODO: add another metadata field to check if the
+        # document is an entire file or just a code snippet
+        if document.metadata['vecdb_idx'].endswith('main'):
             entire_files.append(document)
         else:
             isolated_code_chunks.append(document)
