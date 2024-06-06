@@ -99,10 +99,10 @@ async def split_document(
     document.metadata['original_page_content'] = document.page_content
     try:
         document.page_content = await file_summary
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
         # Failed to summarize file, most likely because it exceeds token limit
         # todo: better error handling, diagnostics here
-        logger.error(f"Failed to summarize document {document.metadata['file_path']}")
+        logger.error(f"Failed to summarize document {document.metadata['file_path']}: {str(e)}")
         document.page_content = ''
 
     document.metadata['language'] = language
