@@ -67,7 +67,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
         assert repo == 'subnet-19', 'Only able to answer questions about sn19 at the moment'
         # todo: when we get multi repo crawler out, get the github_repo from the crawl_targets
-        github_repo = 'vision'
+        github_repo = 'vision-4.0'
 
         # Commented this out since the model used for answering the question is
         # pretty good at detecting 'erroneous' user input

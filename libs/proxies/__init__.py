@@ -84,6 +84,7 @@ async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
 
             if task.post_processing_func:
                 content = task.post_processing_func(content)
+                print("processed content", content)
 
             return content
 

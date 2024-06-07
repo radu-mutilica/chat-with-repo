@@ -41,8 +41,9 @@ class QueryExpander(ProxyLLMTask):
      - The question is about a specific github repository, so it is a programming question.
      - Make use of synonyms for key words in the question (example: "update" is a synonym for \
      "release")
+     - Do not use a numbered list, just one query per line.
     
-    Return 4 versions of the question."""
+    Return 6 versions of the question."""
     user_prompt = """
     Question: {question}
     """
