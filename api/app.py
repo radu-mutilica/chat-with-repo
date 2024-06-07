@@ -59,7 +59,12 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        query = request.messages[0].content
+        content = request.messages[0].content
+        query, repo = content.query, content.repo
+
+        assert repo == 'subnet-19', 'Only able to answer questions about sn19 at the moment'
+        # todo: when we get multi repo crawler out, get the github_repo from the crawl_targets
+        github_repo = 'vision'
 
         # Commented this out since the model used for answering the question is
         # pretty good at detecting 'erroneous' user input
@@ -78,7 +83,9 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
         chat_with_repo_task = ChatWithRepo(
             question=query,
-            context=context
+            context=context,
+            github_name=github_repo,
+            repo_name=repo
         )
 
         logger.debug(f"Context generated length={len(context)}:\n{context}")

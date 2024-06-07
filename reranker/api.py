@@ -18,11 +18,9 @@ logger.setLevel(logging.DEBUG)
 # preconfigured logging for the sentence_transformers package
 import rerankers
 
-app = FastAPI()
+models = {'crossencoder': rerankers.crossencoder}
 
-models = {
-    'crossencoder': rerankers.crossencoder
-}
+app = FastAPI()
 
 
 @app.post("/rerank")
@@ -42,8 +40,8 @@ async def rerank(request: RequestData) -> List[DocumentRank]:
 
     start = time.time()
     ranks = await reranker(
-        query=content['query'],
-        documents=content['documents']
+        query=content.query,
+        documents=content.documents
     )
     logger.debug(f"New ranks generated in {round(time.time() - start, 2)}s: {ranks}")
 

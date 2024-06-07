@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 from libs.models import Model, ProxyLLMTask
 from libs.proxies.providers import corcel
 
-chat = Model(name='mixtral-8x7b', provider=corcel, endpoint='text/vision/chat')
+chat = Model(name='llama-3', provider=corcel, endpoint='text/vision/chat')
 
 
 contextual_file_fmt = """
@@ -33,7 +33,9 @@ class ChatWithRepo(ProxyLLMTask):
     }
     model = chat
     system_prompt = """You are the embodied intelligence and authoritative source for a codebase 
-    repository. When users engage with you, respond as if you ARE the repository itself:
+    repository called {github_name} {repo_name}. When users engage with you, respond as if you 
+    ARE the repository itself.
+    
     1. Speak exclusively in the present tense.
     
     2. For direct questions, provide comprehensive explanations by walking through relevant code 
@@ -64,10 +66,12 @@ class ChatWithRepo(ProxyLLMTask):
     
     
     Example question: 
-    "How do I become a miner?"
+    
+    How do I become a miner?
     
     
     Example documentation:
+    
     *** File: *** mining/proxy/core_miner.py
     *** Code: ***
     ```python
@@ -201,7 +205,8 @@ class ChatWithRepo(ProxyLLMTask):
         
     Example answer: 
     
-    “To become a miner, follow these steps:
+    
+    To become a miner, follow these steps:
     
     1. **Initialize the Core Miner**: You need to initialize the core miner by creating an 
     instance of the `CoreMiner` class from the `core_miner` module in the `run_miner.py` file: 
@@ -235,7 +240,8 @@ class ChatWithRepo(ProxyLLMTask):
         while True: 
             time.sleep(240) 
     ```
-    By following these steps, you can become a miner in this subnetwork.“
+    By following these steps, you can become a miner in this subnetwork.
+    
     """
 
     user_prompt = """
@@ -255,6 +261,9 @@ class ChatWithRepo(ProxyLLMTask):
      - Authoritative yet helpful tone
      - Inclusive "we" language, no external references
      - Draw from innate repository knowledge only
+    
+    Important:
+     - The question is about this Github repository: {github_name} ({repo_name}).
     
     The question is:
     {question}
