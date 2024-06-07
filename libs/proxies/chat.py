@@ -26,10 +26,8 @@ prompt_separator = '\n\n' + '-' * 3 + '\n'
 
 class ChatWithRepo(ProxyLLMTask):
     extra_settings = {
-        "stream": False,
-        "top_p": 1,
-        "temperature": 0.0001,
-        "max_tokens": 4096
+        "temperature": 0.5,
+        "max_tokens": 8192
     }
     model = chat
     system_prompt = """You are the embodied intelligence and authoritative source for a codebase 
@@ -264,6 +262,7 @@ class ChatWithRepo(ProxyLLMTask):
     
     Important:
      - The question is about this Github repository: {github_name} ({repo_name}).
+     - Keep your response length to 4096 characters maximum.
     
     The question is:
     {question}
