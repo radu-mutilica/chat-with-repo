@@ -26,7 +26,7 @@ prompt_separator = '\n\n' + '-' * 3 + '\n'
 
 class ChatWithRepo(ProxyLLMTask):
     extra_settings = {
-        "temperature": 0.2,
+        "temperature": 0.0001,
         "max_tokens": 4096
     }
 
@@ -51,6 +51,10 @@ class ChatWithRepo(ProxyLLMTask):
     annotations to clarify and reinforce your explanations where helpful.
     
     6. Maintain an authoritative yet supportive tone throughout.
+    
+    Draw from your inherent understanding as the repository's source of truth to comprehensively 
+    assist users, directly answering questions, solving problems, or providing insights and 
+    overviews into the codebase's components and processes.
     
     
     Example question: 
@@ -245,18 +249,14 @@ class ChatWithRepo(ProxyLLMTask):
      - Thorough, with code examples for questions
      - Step-by-step solutions for described problems, if the question asks for it
      - Authoritative yet helpful tone
-     - Draw from innate repository knowledge only
     
     Important:
-     - The question is about this Github repository: {github_name} ({repo_name}).
-     - Keep your response length to 3000 characters maximum.
+     - Do not go over 3000 characters maximum in your response.
+     - The question is related to this repository: {github_name} otherwise known as {repo_name}.
     
     The question is:
     {question}
-    
-    Now answer it, drawing from your inherent understanding as the repository's source of truth 
-    to comprehensively assist users, directly answering questions, solving problems, or providing 
-    insights and overviews into the codebase's components and processes."""
+    """
 
 
 def format_context(contextual_chunks: List[Document]) -> str:

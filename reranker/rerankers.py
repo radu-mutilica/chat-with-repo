@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 crossencoder_top_k = int(os.environ['CROSSENCODER_TOP_K'])
 crossencoder_model = CrossEncoder(
     'cross-encoder/ms-marco-MiniLM-L-2-v2',
-    max_length=256
+    max_length=512
 )
 
 

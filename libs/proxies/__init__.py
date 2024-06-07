@@ -82,6 +82,9 @@ async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
                     logger.info(
                         f'Msg #{idx}: size of {message["role"]} prompt: {len(message["content"])}')
 
+            if task.post_processing_func:
+                content = task.post_processing_func(content)
+
             return content
 
 

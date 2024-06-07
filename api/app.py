@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from typing import Dict
 
 import httpx
 import redis.asyncio as redis
@@ -13,9 +15,10 @@ from langchain_core.documents import Document
 from starlette.responses import StreamingResponse
 
 from libs import storage
-from libs.models import RequestData
-from libs.proxies import embeddings, reranker, stream_task
+from libs.models import RequestData, ChatQuery
+from libs.proxies import embeddings, reranker, stream_task, perform_task
 from libs.proxies.chat import format_context, ChatWithRepo
+from libs.proxies.query_expansion import QueryExpander
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
@@ -74,15 +77,20 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         # )
         # query_inspector_response = await perform_task(task=query_inspector_task, client=client)
         # assert query_inspector_response.strip() == 'TRUE', 'Invalid user query'
+        expanded_queries = await perform_task(QueryExpander(
+            question=query
+        ), client=client)
+
+        expanded_query = ChatQuery(main=query, expansions=expanded_queries)
 
         context = await build_rag_context(
-            search_query=query,
+            queries=expanded_query,
             sim_top_k=sim_search_top_k,
             client=client
         )
 
         chat_with_repo_task = ChatWithRepo(
-            question=query,
+            question=expanded_query.main,
             context=context,
             github_name=github_repo,
             repo_name=repo
@@ -99,7 +107,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
 
 async def build_rag_context(
-        search_query: str,
+        queries: ChatQuery,
         sim_top_k: int,
         client: httpx.AsyncClient) -> str:
     """Main logic for the RAG component.
@@ -108,34 +116,28 @@ async def build_rag_context(
     a prompt template.
 
     Args:
-        search_query: (str) the user's search query.
+        queries: (ChatQuery) the user's search queries (expanded).
         sim_top_k: (int) the top_k for the sim search.
         client: (httpx.AsyncClient) the httpx client.
 
     Returns:
         A string representing the context for the final llm prompt.
     """
-    start = time.time()
-    search_query_embedding = await embeddings.generate_embedding(search_query, client)
-    logger.info(f'Got embedding for user search query, took {round(time.time() - start, 2)}s')
 
     logger.info(f'Searching collection {collection_name}')
-    sim_vectors = storage.get_db(collection_name).query(
-        query_embeddings=search_query_embedding,
-        n_results=sim_top_k
-    )
-    logger.debug(f'Found {len(sim_vectors)} snippets from sim search. top_k={sim_top_k}')
+
+    all_vectors = await sim_search(queries, sim_top_k, client)
 
     start = time.time()
-    ranks = reranker.rerank(search_query, sim_vectors["documents"][0], client)
+    ranks = reranker.rerank(queries.main, all_vectors['documents'], client)
     logger.info(f'Got new ranks from reranker, took {round(time.time() - start, 2)}s')
 
     # Build a list with only the ranked documents, these are the final ones that
     # are used for formatting the RAG context
     documents = []
     for content, metadata in zip(
-            sim_vectors["documents"][0],
-            sim_vectors["metadatas"][0]):
+            all_vectors['documents'],
+            all_vectors['metadatas']):
         doc = Document(page_content=content, metadata=metadata)
         documents.append(doc)
     ranked_snippets = []
@@ -146,3 +148,44 @@ async def build_rag_context(
         )
 
     return format_context(ranked_snippets)
+
+
+async def sim_search(queries: ChatQuery, sim_top_k: int, client: httpx.AsyncClient):
+    all_vectors = {
+        'documents': [],
+        'metadatas': [],
+    }
+    ids, duplicates = [], 0
+
+    sim_search_tasks = [
+        __sim_search(query, sim_top_k, client) for query in queries.all
+    ]
+
+    for task in asyncio.as_completed(sim_search_tasks):
+        sim_vectors = await task
+        for snippet_doc, snippet_metadata in zip(sim_vectors['documents'][0],
+                                                 sim_vectors['metadatas'][0]):
+            if snippet_metadata['vecdb_idx'] not in ids:
+                all_vectors['documents'].append(snippet_doc)
+                all_vectors['metadatas'].append(snippet_metadata)
+                ids.append(snippet_metadata['vecdb_idx'])
+            else:
+                duplicates += 1
+
+    logger.debug(
+        f'Duplicates found: {duplicates} and dropped. Total now is: {len(all_vectors["documents"])}')
+
+    return all_vectors
+
+
+async def __sim_search(query: str, sim_top_k: int, client: httpx.AsyncClient) -> Dict:
+    start = time.time()
+    search_query_embedding = await embeddings.generate_embedding(query, client)
+    logger.info(f'Embedding took {round(time.time() - start, 2)}s')
+    sim_vectors = storage.get_db(collection_name).query(
+        query_embeddings=search_query_embedding,
+        n_results=sim_top_k
+    )
+    logger.debug(
+        f'Got {len(sim_vectors["documents"][0])} top_k={sim_top_k}')
+    return sim_vectors

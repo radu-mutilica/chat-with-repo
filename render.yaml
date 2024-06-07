@@ -81,7 +81,7 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: CROSSENCODER_TOP_K
-        value: 7
+        value: 10
       - fromGroup: veggie-scout-envs
     region: frankfurt
     dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT

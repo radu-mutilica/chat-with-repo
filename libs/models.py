@@ -138,6 +138,7 @@ class ProxyLLMTask:
     user_prompt = ''
     model = None
     extra_settings = None
+    post_processing_func = None
 
     def __init__(self, **kwargs):
         system_prompt = self.system_prompt.format(**kwargs)
@@ -153,3 +154,12 @@ class ProxyLLMTask:
 class DocumentRank(BaseModel):
     corpus_id: int
     score: float
+
+
+class ChatQuery(BaseModel):
+    main: str
+    expansions: List[str]
+
+    @property
+    def all(self):
+        return [self.main] + self.expansions
