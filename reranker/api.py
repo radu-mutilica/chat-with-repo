@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import List, Dict
+from typing import List
 
 from fastapi import FastAPI
 

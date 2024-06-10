@@ -19,6 +19,7 @@ from libs.models import RequestData, ChatQuery
 from libs.proxies import embeddings, reranker, stream_task, perform_task
 from libs.proxies.chat import format_context, ChatWithRepo
 from libs.proxies.query_expansion import QueryExpander
+from libs.utils import register_profiling_middleware
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
@@ -43,6 +44,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+register_profiling_middleware(app)
 
 
 async def get_client():
@@ -77,17 +79,26 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         # )
         # query_inspector_response = await perform_task(task=query_inspector_task, client=client)
         # assert query_inspector_response.strip() == 'TRUE', 'Invalid user query'
-        expanded_queries = await perform_task(QueryExpander(
-            question=query
-        ), client=client)
+        start = time.time()
+        # expanded_queries = await perform_task(QueryExpander(
+        #     question=query
+        # ), client=client)
 
-        expanded_query = ChatQuery(main=query, expansions=expanded_queries)
+        # delta_seconds = time.time() - start
+        # logger.info(f"{round(delta_seconds, 2)}s: Query expanded")
 
+        expanded_query = ChatQuery(
+            main=query,
+            expansions=[]  # no variants atm, still investigating their usefulness
+        )
+        start = time.time()
         context = await build_rag_context(
             queries=expanded_query,
             sim_top_k=sim_search_top_k,
             client=client
         )
+        delta_seconds = time.time() - start
+        logger.info(f"{round(delta_seconds, 2)}s: Context length={len(context)}:\n{context}")
 
         chat_with_repo_task = ChatWithRepo(
             question=expanded_query.main,
@@ -95,8 +106,6 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
             github_name=github_repo,
             repo_name=repo
         )
-
-        logger.debug(f"Context generated length={len(context)}:\n{context}")
         # Hardcode this to a streaming response. Once this model has support
         # for standard responses, we can fix this
         return StreamingResponse(stream_task(chat_with_repo_task))
@@ -106,6 +115,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         raise HTTPException(status_code=500, detail="An error occurred while processing the query")
 
 
+# todo: refactor this big boy
 async def build_rag_context(
         queries: ChatQuery,
         sim_top_k: int,
@@ -129,17 +139,18 @@ async def build_rag_context(
     all_vectors = await sim_search(queries, sim_top_k, client)
 
     start = time.time()
-    ranks = reranker.rerank(queries.main, all_vectors['documents'], client)
+    ranks = reranker.rerank(queries.main, all_vectors['documents'][0], client)
     logger.info(f'Got new ranks from reranker, took {round(time.time() - start, 2)}s')
 
     # Build a list with only the ranked documents, these are the final ones that
     # are used for formatting the RAG context
     documents = []
     for content, metadata in zip(
-            all_vectors['documents'],
-            all_vectors['metadatas']):
+            all_vectors['documents'][0],
+            all_vectors['metadatas'][0]):
         doc = Document(page_content=content, metadata=metadata)
         documents.append(doc)
+
     ranked_snippets = []
     ranks = await ranks
     for rank in ranks:
@@ -151,31 +162,7 @@ async def build_rag_context(
 
 
 async def sim_search(queries: ChatQuery, sim_top_k: int, client: httpx.AsyncClient):
-    all_vectors = {
-        'documents': [],
-        'metadatas': [],
-    }
-    ids, duplicates = [], 0
-
-    sim_search_tasks = [
-        __sim_search(query, sim_top_k, client) for query in queries.all
-    ]
-
-    for task in asyncio.as_completed(sim_search_tasks):
-        sim_vectors = await task
-        for snippet_doc, snippet_metadata in zip(sim_vectors['documents'][0],
-                                                 sim_vectors['metadatas'][0]):
-            if snippet_metadata['vecdb_idx'] not in ids:
-                all_vectors['documents'].append(snippet_doc)
-                all_vectors['metadatas'].append(snippet_metadata)
-                ids.append(snippet_metadata['vecdb_idx'])
-            else:
-                duplicates += 1
-
-    logger.debug(
-        f'Duplicates found: {duplicates} and dropped. Total now is: {len(all_vectors["documents"])}')
-
-    return all_vectors
+    return await __sim_search(queries.main, sim_top_k, client)
 
 
 async def __sim_search(query: str, sim_top_k: int, client: httpx.AsyncClient) -> Dict:

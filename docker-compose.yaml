@@ -26,6 +26,7 @@ services:
       RERANKER_HOST: "reranker"
       RERANKER_PORT: "80"
       LOG_LEVEL: "DEBUG"
+      PROFILING_ENABLED: "FALSE"
     depends_on:
       - chromadb
       - redis
