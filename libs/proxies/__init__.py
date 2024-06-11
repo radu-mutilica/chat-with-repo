@@ -68,7 +68,6 @@ async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
 
         except httpx.HTTPError as exc:
             logger.error(f"HTTP Exception for {exc.request.url}")
-            logger.error(exc.response.text)
             logger.debug(f"Payload: \n{payload}")
             for idx, message in enumerate(payload['messages']):
                 logger.debug(f'Msg #{idx}: size of {message["role"]} '
@@ -84,7 +83,6 @@ async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
 
             if task.post_processing_func:
                 content = task.post_processing_func(content)
-                print("processed content", content)
 
             return content
 
@@ -103,6 +101,10 @@ async def stream_task(task: ProxyLLMTask) -> AsyncGenerator:
         "messages": task.prompts.api_format()
     }
 
+    # with open('payload.new2.json', 'w') as outfile:
+    #     import json
+    #     outfile.write(json.dumps(payload))
+
     # Send the request and stream the response
     async with httpx.AsyncClient().stream(
             'POST',
@@ -112,7 +114,6 @@ async def stream_task(task: ProxyLLMTask) -> AsyncGenerator:
             timeout=timeout) as r:
         async for chunk in r.aiter_bytes():
             yield chunk
-
 
 # async def run_task(task: ProxyLLMTask) -> str:
 #     """todo: remove this after refactoring"""

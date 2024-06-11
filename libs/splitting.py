@@ -15,23 +15,24 @@ logger = logging.getLogger(__name__)
 
 splitters = {}
 contextual_window_snippet_radius = 2
-
-summary = """
-# {file_path}
-# {file_summary}
-# {snippet_summary}
-
-{content}
-"""
+vecdb_idx_fmt = "{source}:{index}"
 extra_readme_append_fmt = """
+
 ***
 Document path: {file_path}
 Document contents:
 {page_content}
 ***
+
 """
 
-vecdb_idx_fmt = "{source}:{index}"
+
+class MissingRootReadme(Exception):
+    pass
+
+
+class MultipleRootReadmes(Exception):
+    pass
 
 
 def prepare_splitter(language: Language) -> TextSplitter:
@@ -41,7 +42,7 @@ def prepare_splitter(language: Language) -> TextSplitter:
     if language not in splitters:
         splitters[language] = RecursiveCharacterTextSplitter.from_language(
             language=language,
-            chunk_size=1024,
+            chunk_size=512,
             chunk_overlap=0
         )
     return splitters[language]
@@ -49,8 +50,8 @@ def prepare_splitter(language: Language) -> TextSplitter:
 
 async def split_document(
         document: Document,
-        repo: Repo, client:
-        httpx.AsyncClient) -> List[Document]:
+        repo: Repo,
+        client: httpx.AsyncClient) -> List[Document]:
     """Most of the heavy lifting associated with splitting and summarizing files and code snippets.
     
     This async func does the following processing steps:
@@ -59,7 +60,7 @@ async def split_document(
     - Summarize the file.
     - Split the file into code chunks.
     - Summarize each code chunk separately, using context like the aforementioned file summary.
-    - Return the chunks as well as the file.
+    - Return the chunks as well as the file summary (merged into a list of Documents).
     
     Note:
         For increased accuracy in final results, we ended up taking the approach of hiding away
@@ -67,7 +68,7 @@ async def split_document(
         which is passed to the embedding function.
         
         When we build the final context for the prompt, we make sure to insert both snippet
-        summaries as well as raw code.
+        summaries and raw code.
     
     Args:
         document: (Document) the document to split.
@@ -83,7 +84,7 @@ async def split_document(
     file_summary = perform_task(
         summaries.SummarizeFile(
             repo_name=repo.name,
-            repo_summary=repo.metadata['summary'],
+            repo_summary=repo.summary,
             tree=repo.tree,
             file_path=document.metadata['file_path'],
             content=document.page_content,
@@ -100,16 +101,14 @@ async def split_document(
     try:
         document.page_content = await file_summary
     except httpx.HTTPError as e:
-        # Failed to summarize file, most likely because it exceeds token limit
-        # todo: better error handling, diagnostics here
         logger.error(f"Failed to summarize document {document.metadata['file_path']}: {str(e)}")
         document.page_content = ''
 
     document.metadata['language'] = language
-    document.metadata['document_type'] = 'file'
+    document.metadata['document_type'] = 'file-summary'
     document.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
         source=document.metadata['file_path'],
-        index='main'
+        index='summary'
     )
 
     for idx, snippet in enumerate(snippets):
@@ -117,7 +116,7 @@ async def split_document(
         snippet_summary = perform_task(
             summaries.SummarizeSnippet(
                 repo_name=repo.name,
-                repo_summary=repo.metadata['summary'],
+                repo_summary=repo.summary,
                 tree=repo.tree,
                 language=language,
                 file_path=snippet.metadata['file_path'],
@@ -126,16 +125,17 @@ async def split_document(
                 content=snippet.page_content),
             client=client
         )
-        # Store the "code" in the metadata
+        # Store the "raw code" in the metadata, use it when building context
+        # but use the summary for sim search
         snippet.metadata['original_page_content'] = snippet.page_content
-        snippet.metadata['document_type'] = 'code'
+        snippet.metadata['document_type'] = 'code-snippet'
         snippet.metadata['vecdb_idx'] = vecdb_idx_fmt.format(
             source=document.metadata['file_path'],
             index=idx
         )
         snippet.page_content = await snippet_summary
 
-    # No reason to add the document if we didn't compute a summary for it
+    # Only add document if we have a summary for it
     if document.page_content:
         snippets.insert(0, document)
 
@@ -143,15 +143,14 @@ async def split_document(
 
 
 async def split_documents(
-        documents: List[Document],
         repo: Repo,
         client: httpx.AsyncClient
 ) -> List[Document]:
-    """Wrapper function for async work"""
+    """Wrapper function for building a list of coroutines and executing them"""
     chunks = []
 
     tasks = [
-        split_document(document, repo, client) for document in documents
+        split_document(document, repo, client) for document in repo.documents
     ]
 
     for task in asyncio.as_completed(tasks):
@@ -182,7 +181,7 @@ def wrap_code_snippet_with_neighbours(snippet_index: int, code_snippets: List[Do
     return '\n'.join((doc.page_content for doc in code_snippets[min_idx:max_idx]))
 
 
-def merge_readmes(readme: Document, other_readmes: List[Document]) -> Document:
+def merge_readmes(main_readme: str, other_md_files: List[Document]) -> str:
     """Given a main Readme.md document, and a list of other readmes found in the repo, check
     if the main readme file links to or mentions the secondary ones, and if so, insert their
     contents into the Document.page_content of the main_readme.
@@ -190,67 +189,63 @@ def merge_readmes(readme: Document, other_readmes: List[Document]) -> Document:
     Essentially we are merging together multiple page_contents.
 
     Args:
-        readme: (Document) the main Readme.md document.
-        other_readmes: (list of Document) a list of other readmes.
+        main_readme: (Document) the main readme.md document.
+        other_md_files: (List[Document]) a list of other readmes.
 
     Returns:
-        Document: the merged document.
+        str: the main readme document merged with other referenced markdown files.
     """
-    enriched_page_content = readme.page_content
+    references = {}
 
-    referenced_files = {}
-    for line in readme.page_content.splitlines():
-        for other_readme in other_readmes:
-            if other_readme.metadata['file_path'] in line:
-                referenced_files[other_readme.metadata['file_path']] = other_readme
+    for line in main_readme.splitlines():
+        for md_file in other_md_files:
+            if md_file.metadata['file_path'] in line:
+                references[md_file.metadata['file_path']] = md_file
+                break
 
-    if referenced_files:
-        for file_path, other_readme in referenced_files.items():
-            enriched_page_content += extra_readme_append_fmt.format(
+    if references:
+        for file_path, md_file in references.items():
+            main_readme += extra_readme_append_fmt.format(
                 file_path=file_path,
-                page_content=other_readme.page_content
+                page_content=md_file.page_content
             )
 
-    # We store the merged version in the metadata
-    readme.metadata['enriched_page_content'] = enriched_page_content
-
-    return readme
+    return main_readme
 
 
-def find_readme(documents: List[Document]) -> Document:
-    """Traverse the list of documents and try to find the main Readme.md file. If the Readme.md file
-    mentions or links to other readme files, be sure to insert them into the page_contents too.
+def expand_root_readme(documents: List[Document]) -> str:
+    """Traverse the list of documents and try to find all the markdown files as well as the root
+    readme, merging them into a big readme file.
 
     Args:
-        documents: (list) A list of documents, some of which might be Readme.md files.
+        documents: (list) A list of documents, some of which might be markdown files.
 
     Returns:
-        Document: The main Readme.md file.
+        The merged root readme document with other referenced markdown files.
 
     Raises:
-        MissingReadme: If no main Readme.md file is found.
+        MultipleRootReadmes: if multiple root readmes are found.
+        MissingRootReadme: if the root readme is not found.
     """
-    other_readmes = []
+    extra_md_files = []
     root_readme = None
 
     for index, document in enumerate(documents):
-
         if document.metadata['file_path'].lower() == 'readme.md':
             # This must be the root repo readme file
-            root_readme = document
+            if root_readme is None:
+                root_readme = document.page_content
+            else:
+                raise MultipleRootReadmes('Found multiple root readmes, can be only one')
+
         elif document.metadata['file_name'].lower().endswith('.md'):
-            # These are some other readme files, probably relevant still
-            other_readmes.append(document)
+            # These are potentially other readme files, will check below if referenced
+            extra_md_files.append(document)
 
     if root_readme:
-        if other_readmes:
-            root_readme = merge_readmes(root_readme, other_readmes)
-
+        if extra_md_files:  # Insert their contents into the root readme
+            root_readme = merge_readmes(root_readme, extra_md_files)
     else:
-        raise MissingReadme('no main readme file found')
+        raise MissingRootReadme('no root readme.md found, unable to summarize repo')
 
     return root_readme
-
-
-class MissingReadme(Exception):
-    pass

@@ -1,9 +1,7 @@
-import asyncio
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from typing import Dict
 
 import httpx
 import redis.asyncio as redis
@@ -11,14 +9,13 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
 from httpx import AsyncClient
-from langchain_core.documents import Document
+from langchain_community.document_transformers import LongContextReorder
 from starlette.responses import StreamingResponse
 
 from libs import storage
-from libs.models import RequestData, ChatQuery
-from libs.proxies import embeddings, reranker, stream_task, perform_task
+from libs.models import RequestData, ChatQuery, RAGDocument
+from libs.proxies import embeddings, reranker, stream_task
 from libs.proxies.chat import format_context, ChatWithRepo
-from libs.proxies.query_expansion import QueryExpander
 from libs.utils import register_profiling_middleware
 
 logger = logging.getLogger()
@@ -45,6 +42,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 register_profiling_middleware(app)
+long_context_reorder = LongContextReorder()
 
 
 async def get_client():
@@ -57,7 +55,7 @@ async def get_client():
 async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get_client)):
     """Endpoint for chatting with your repo.
 
-    Get the user's search string, build the context, format the prompt and issue the LLM call.
+    Get the user's search string, build the context, format the prompt and issue the assistant call.
 
     Args:
         request: (RequestData) the request.
@@ -71,34 +69,18 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         # todo: when we get multi repo crawler out, get the github_repo from the crawl_targets
         github_repo = 'vision-4.0'
 
-        # Commented this out since the model used for answering the question is
-        # pretty good at detecting 'erroneous' user input
-        #
-        # query_inspector_task = QueryInspector(
-        #     user_input=query
-        # )
-        # query_inspector_response = await perform_task(task=query_inspector_task, client=client)
-        # assert query_inspector_response.strip() == 'TRUE', 'Invalid user query'
-        start = time.time()
-        # expanded_queries = await perform_task(QueryExpander(
-        #     question=query
-        # ), client=client)
-
-        # delta_seconds = time.time() - start
-        # logger.info(f"{round(delta_seconds, 2)}s: Query expanded")
-
         expanded_query = ChatQuery(
             main=query,
             expansions=[]  # no variants atm, still investigating their usefulness
         )
         start = time.time()
-        context = await build_rag_context(
+        context = await rag_context_pipeline(
             queries=expanded_query,
             sim_top_k=sim_search_top_k,
             client=client
         )
         delta_seconds = time.time() - start
-        logger.info(f"{round(delta_seconds, 2)}s: Context length={len(context)}:\n{context}")
+        logger.info(f"{delta_seconds:.2f}s: Context length={len(context)}:\n{context}")
 
         chat_with_repo_task = ChatWithRepo(
             question=expanded_query.main,
@@ -115,15 +97,17 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         raise HTTPException(status_code=500, detail="An error occurred while processing the query")
 
 
-# todo: refactor this big boy
-async def build_rag_context(
+async def rag_context_pipeline(
         queries: ChatQuery,
         sim_top_k: int,
         client: httpx.AsyncClient) -> str:
-    """Main logic for the RAG component.
+    """Main logic for building the RAG context.
 
-    Use similarity search to gather a list of documents, then rerank them and format them into
-    a prompt template.
+    The pipeline consists of the following steps:
+        1. Perform a similarity search using the query.
+        2. Send documents to reranker.
+        3. Reorder for "long context".
+        4. Format into a {context} str to insert into the prompt.
 
     Args:
         queries: (ChatQuery) the user's search queries (expanded).
@@ -136,43 +120,52 @@ async def build_rag_context(
 
     logger.info(f'Searching collection {collection_name}')
 
-    all_vectors = await sim_search(queries, sim_top_k, client)
+    sim_vectors = await sim_search(queries, sim_top_k, client)
 
     start = time.time()
-    ranks = reranker.rerank(queries.main, all_vectors['documents'][0], client)
-    logger.info(f'Got new ranks from reranker, took {round(time.time() - start, 2)}s')
+    ranks = reranker.rerank(queries.main, sim_vectors['documents'][0], client)
+    logger.info(f'Got new ranks from reranker, took {time.time() - start:.2f}s')
 
     # Build a list with only the ranked documents, these are the final ones that
     # are used for formatting the RAG context
     documents = []
-    for content, metadata in zip(
-            all_vectors['documents'][0],
-            all_vectors['metadatas'][0]):
-        doc = Document(page_content=content, metadata=metadata)
-        documents.append(doc)
+    for content, metadata in zip(sim_vectors['documents'][0], sim_vectors['metadatas'][0]):
+        documents.append(RAGDocument(page_content=content, metadata=metadata))
 
-    ranked_snippets = []
-    ranks = await ranks
-    for rank in ranks:
-        ranked_snippets.append(
+    ranked_documents = []
+    for rank in await ranks:
+        ranked_documents.append(
             documents[int(rank['corpus_id'])],
         )
 
-    return format_context(ranked_snippets)
+    # Final touches, apply a long context reorder to mitigate the "lost in the middle" effect
+    ordered_documents = long_context_reorder.transform_documents(ranked_documents)
+
+    return format_context(ordered_documents)
 
 
 async def sim_search(queries: ChatQuery, sim_top_k: int, client: httpx.AsyncClient):
-    return await __sim_search(queries.main, sim_top_k, client)
+    """Perform a similarity search on the database and find top_k related vectors.
 
+    Args:
+        queries: (ChatQuery) the user's search queries.
+        sim_top_k: (int) the top_k for the sim search.
+        client: (httpx.AsyncClient) the httpx client.
 
-async def __sim_search(query: str, sim_top_k: int, client: httpx.AsyncClient) -> Dict:
+    Returns:
+        Top similar vectors.
+    """
     start = time.time()
-    search_query_embedding = await embeddings.generate_embedding(query, client)
-    logger.info(f'Embedding took {round(time.time() - start, 2)}s')
+    search_query_embedding = await embeddings.generate_embedding(queries.main, client)
+    logger.info(f'Embedding took {time.time() - start:.2f}s')
+
+    start = time.time()
     sim_vectors = storage.get_db(collection_name).query(
         query_embeddings=search_query_embedding,
         n_results=sim_top_k
     )
-    logger.debug(
-        f'Got {len(sim_vectors["documents"][0])} top_k={sim_top_k}')
+    logger.info(f'Simsearch took {time.time() - start:.2f}s')
+
     return sim_vectors
+
+

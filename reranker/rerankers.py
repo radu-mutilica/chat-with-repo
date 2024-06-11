@@ -29,8 +29,7 @@ async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, int|f
     ranks = crossencoder_model.rank(query, documents, top_k=crossencoder_top_k)
 
     logger.debug(
-        f'Crossencoder took {round(time.time() - start, 2)}s and generated '
-        f'following rankings{ranks}')
+        f'Crossencoder took {time.time() - start:.2f}s and generated following rankings{ranks}')
     logger.debug(
         f'Crossencoder dropped {len(documents) - len(ranks)} docs after applying '
         f'a top_k={crossencoder_top_k}'

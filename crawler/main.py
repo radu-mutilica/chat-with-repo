@@ -34,34 +34,29 @@ async def main():
     """
     client = httpx.AsyncClient()
     with tempfile.TemporaryDirectory() as local_path:
+
         logger.info(f'Loading following repository: {github_url}:{github_branch} at {local_path}')
         repo = load_repo(github_url, local_path, branch=github_branch)
-        try:
-            readme = splitting.find_readme(repo.documents)
-        except splitting.MissingReadme:
-            # todo: what do if repo is missing a main readme file? the whole thing revolves
-            # around building context based on the initial repo summary, which might be impossible
-            # without a solid repo readme file
-            raise
 
-        logger.info(f'Found root readme file {readme.metadata["file_path"]}')
+        # Find and expand the root readme file to embed all the other referenced .md files.
+        # This block of (hopefully) high-level repo knowledge is used to perform a repo summary.
+        expanded_readme = splitting.expand_root_readme(repo.documents)
         repo_summary_task = summaries.SummarizeRepo(
-            content=readme.metadata['enriched_page_content'],
+            content=expanded_readme,
             repo_name=repo.name,
             tree=repo.tree,
         )
         repo_summary = await perform_task(repo_summary_task, client)
+        repo.summary = repo_summary
         logger.info(f'Summarized repo summary task: {repo_summary}')
 
-        repo.metadata['summary'] = repo_summary
         chunks = await splitting.split_documents(
-            documents=repo.documents,
             repo=repo,
             client=client
         )
+
         logger.info(f'Found {len(chunks)} chunks')
-        with db.VectorDBCollection(
-                collection_name=os.environ['CHROMA_COLLECTION']) as vecdb_client:
+        with db.VectorDBCollection(os.environ['CHROMA_COLLECTION']) as vecdb_client:
             vecdb_client.add(
                 documents=[chunk.page_content for chunk in chunks],
                 metadatas=[chunk.metadata for chunk in chunks],
@@ -74,19 +69,16 @@ def load_repo(url: str, temp_path: str, branch='main') -> Repo:
     """Helper function to load a git repo"""
     name = url.rsplit('/', maxsplit=1)[-1]
     root_path = f'{temp_path}/{name}'
-
     os.makedirs(root_path)
 
     git_loader = GitLoader(clone_url=url, repo_path=root_path, branch=branch)
-    documents = git_loader.load()
-    tree = display_tree(root_path, string_rep=True)
 
     repo = Repo(
         name=name,
         branch=branch,
         url=url,
-        documents=documents,
-        tree=tree,
+        documents=git_loader.load(),
+        tree=display_tree(root_path, string_rep=True),
     )
     return repo
 

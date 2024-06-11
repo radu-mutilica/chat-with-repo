@@ -43,6 +43,6 @@ async def rerank(request: RequestData) -> List[DocumentRank]:
         query=content.query,
         documents=content.documents
     )
-    logger.debug(f"New ranks generated in {round(time.time() - start, 2)}s: {ranks}")
+    logger.debug(f"New ranks generated in {time.time() - start:.2f}s: {ranks}")
 
     return [DocumentRank.parse_obj(rank) for rank in ranks]

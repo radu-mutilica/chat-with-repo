@@ -13,33 +13,12 @@ class Repo(BaseModel):
     url: str
     documents: List
     tree: str
-    metadata: Dict = {}
-
-
-class CompletionUsage(BaseModel):
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
+    summary: Dict = {}
 
 
 class EmbeddingUsage(BaseModel):
     prompt_tokens: int
     total_tokens: int
-
-
-class Choice(BaseModel):
-    text: str
-    index: int
-    finish_reason: Optional[str]
-
-
-class CompletionResponse(BaseModel):
-    id: str
-    object: str
-    created: int
-    model: str
-    choices: List[Choice]
-    usage: Optional[CompletionUsage]
 
 
 class Object(BaseModel):
@@ -163,3 +142,36 @@ class ChatQuery(BaseModel):
     @property
     def all(self):
         return [self.main] + self.expansions
+
+
+contextual_file_fmt = """
+*** File: *** {path}
+*** Summary: ***: {summary}"""
+
+contextual_code_fmt = """
+*** File: *** {path}
+*** Code: *** 
+{code}
+*** Summary: ***: {summary}"""
+
+code_fmt = """```{language}
+{raw_code}
+```"""
+
+
+class RAGDocument(Document):
+    def __str__(self):
+        if self.metadata['document_type'] == 'file-summary':
+            return contextual_file_fmt.format(
+                path=self.metadata['file_path'],
+                summary=self.page_content,
+            )
+        elif self.metadata['document_type'] == 'code-snippet':
+            return contextual_code_fmt.format(
+                path=self.metadata['file_path'],
+                summary=self.page_content,
+                code=code_fmt.format(
+                    language=self.metadata['language'],
+                    raw_code=self.metadata['original_page_content']
+                )
+            )
