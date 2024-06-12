@@ -6,11 +6,13 @@ chat_message_fmt = '{role}: {content}'
 
 
 def strip_new_query(_, text: str) -> str:
+    """Helper func to remove prefix from LLM response"""
     assert 'Rephrased: ' in text
     return text[10:]
 
 
 def format_chat_history(_, kwargs) -> str:
+    """Helper func to string format a collection of chat history messages"""
     raw_chat_history = kwargs.pop('chat_history')
 
     kwargs['chat_history'] = '\n'.join(
