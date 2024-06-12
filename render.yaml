@@ -70,6 +70,7 @@ services:
       ignoredPaths:
         - crawler/**
         - reranker/**
+        - evaluation/**
     rootDir: .
 
   - type: pserv
@@ -81,7 +82,7 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: CROSSENCODER_TOP_K
-        value: 4
+        value: 5
       - fromGroup: veggie-scout-envs
     region: frankfurt
     dockerCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
@@ -91,6 +92,7 @@ services:
       ignoredPaths:
         - crawler/**
         - api/**
+        - evaluation/**
     rootDir: .
 
   - type: cron
@@ -131,6 +133,37 @@ services:
       ignoredPaths:
         - api/**
         - reranker/**
+        - evaluation/**
+
+  - type: pserv
+    name: evaluation
+    runtime: docker
+    repo: https://github.com/radu-mutilica/chat-with-repo
+    plan: standard
+    envVars:
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CHROMA_COLLECTION
+        value: chat-with-repo
+      - key: CHROMA_NAME
+        value: chromadb
+      - key: CHROMA_HOST
+        fromService:
+          name: chroma
+          type: pserv
+          property: host
+      - key: CHROMA_PORT
+        fromService:
+          name: chroma
+          type: pserv
+          property: port
+      - fromGroup: veggie-scout-envs
+
+    region: frankfurt
+    dockerCommand: ./run_evaluation_pipeline.sh
+    dockerContext: .
+    dockerfilePath: ./evaluation/Dockerfile
+    rootDir: .
 
   - type: redis
     plan: standard

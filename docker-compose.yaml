@@ -80,7 +80,7 @@ services:
           path: ./libs
           target: /app/libs
     environment:
-      CROSSENCODER_TOP_K: "4"
+      CROSSENCODER_TOP_K: "5"
 
     networks:
       - net
@@ -110,6 +110,35 @@ services:
       - "6379:6379"
     networks:
       - net
+
+  evaluation:
+    build:
+      context: .
+      dockerfile: evaluation/Dockerfile
+    container_name: evaluation
+    command: python -m pytest -s --capture=no .
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./evaluation
+          target: /app
+        - action: sync+restart
+          path: ./libs
+          target: /app/libs
+    environment:
+      CORCEL_API_KEY: "${CORCEL_API_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      CHROMA_HOST: "chromadb"
+      CHROMA_PORT: "8000"
+      CHROMA_COLLECTION: "chat-with-repo"
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+      LOG_LEVEL: "INFO"
+    networks:
+      - net
+    depends_on:
+      - chromadb
+      - api
 
 volumes:
   index_data:

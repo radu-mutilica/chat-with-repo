@@ -1,0 +1,6 @@
+ragas~=0.1.9
+langchain-openai~=0.1.8
+pytest
+aiolimiter
+chromadb
+pytest-asyncio
