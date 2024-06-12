@@ -12,6 +12,7 @@ from httpx import AsyncClient
 from langchain_community.document_transformers import LongContextReorder
 from starlette.responses import StreamingResponse
 
+from libs import crawl_targets
 from libs import storage
 from libs.models import RequestData, RAGDocument
 from libs.proxies import embeddings, reranker, stream_task, perform_task, rephraser
@@ -26,7 +27,6 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-collection_name = os.environ['CHROMA_COLLECTION']
 sim_search_top_k = int(os.environ['SIM_SEARCH_TOP_K'])
 redis_url = os.environ['REDIS_URL']
 
@@ -64,11 +64,9 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
     try:
         # todo: Assume all messages are about the same repo
         last_message, chat_history = request.last_message(), request.history()
-        query, repo = last_message.content.query, last_message.content.repo
+        query, subnet = last_message.content.query, last_message.content.repo
 
-        # todo: when we get multi repo crawler out, get the github_repo from the crawl_targets
-        assert repo == 'subnet-19', 'Only able to answer questions about sn19 at the moment'
-        github_repo = 'vision-4.0'
+        assert subnet in crawl_targets, "Not a valid repo"
 
         # Check for a chat history, and if present, rephrase the query given the history.
         # This step is important to guarantee good simsearch results further down
@@ -86,6 +84,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
         start = time.time()
         context = await rag_context_pipeline(
+            collection=crawl_targets[subnet]['target_collection'],
             query=rag_query,
             sim_top_k=sim_search_top_k,
             client=client
@@ -95,13 +94,16 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         chat_with_repo_task = ChatWithRepo(
             question=rag_query,
             context=context,
-            github_name=github_repo,
-            repo_name=repo
+            github_name=crawl_targets[subnet]['name'],
+            repo_name=subnet
 
         )
         # Hardcode this to a streaming response. Once this model has support
         # for standard responses, we can fix this
         return StreamingResponse(stream_task(chat_with_repo_task))
+
+    except AssertionError:
+        raise HTTPException(status_code=400, detail="Not a valid repository")
 
     except Exception:
         logger.exception('Failed to fulfill request because:')
@@ -110,6 +112,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
 async def rag_context_pipeline(
         query: str,
+        collection: str,
         sim_top_k: int,
         client: httpx.AsyncClient) -> str:
     """Main logic for building the RAG context.
@@ -121,7 +124,8 @@ async def rag_context_pipeline(
         4. Format into a {context} str to insert into the prompt.
 
     Args:
-        query: (str) the user's search queries.
+        query: (str) the user's search query.
+        collection: (str) the vector db collection name.
         sim_top_k: (int) the top_k for the sim search.
         client: (httpx.AsyncClient) the httpx client.
 
@@ -129,9 +133,9 @@ async def rag_context_pipeline(
         A str which is the formatted context.
     """
 
-    logger.info(f'Searching collection {collection_name}')
+    logger.info(f'Searching collection {collection}')
 
-    sim_vectors = await sim_search(query, sim_top_k, client)
+    sim_vectors = await sim_search(query, collection, sim_top_k, client)
 
     start = time.time()
     ranks = reranker.rerank(query, sim_vectors['documents'][0], client)
@@ -155,11 +159,12 @@ async def rag_context_pipeline(
     return format_context(ordered_documents)
 
 
-async def sim_search(query: str, sim_top_k: int, client: httpx.AsyncClient):
+async def sim_search(query: str, collection: str, sim_top_k: int, client: httpx.AsyncClient):
     """Perform a similarity search on the database and find top_k related vectors.
 
     Args:
         query: (str) the user's search query.
+        collection: (str) the vector db collection name.
         sim_top_k: (int) the top_k for the sim search.
         client: (httpx.AsyncClient) the httpx client.
 
@@ -171,7 +176,7 @@ async def sim_search(query: str, sim_top_k: int, client: httpx.AsyncClient):
     logger.info(f'Embedding took {time.time() - start:.2f}s')
 
     start = time.time()
-    sim_vectors = storage.get_db(collection_name).query(
+    sim_vectors = storage.get_db(collection).query(
         query_embeddings=search_query_embedding,
         n_results=sim_top_k
     )

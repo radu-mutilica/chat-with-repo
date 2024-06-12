@@ -34,12 +34,10 @@ services:
         sync: false
       - key: CHROMA_USER
         sync: false
-      - key: CHROMA_COLLECTION
-        value: chat-with-repo
       - key: REDIS_URL
         fromService:
-          type: redis
           name: redis
+          type: pserv
           property: connectionString
       - key: CHROMA_HOST
         fromService:
@@ -101,12 +99,10 @@ services:
     envVars:
       - key: LOG_LEVEL
         value: INFO
+      - key: GITHUB_API_KEY
+        sync: false
       - key: GITHUB_URL
         value: https://github.com/namoray/vision
-      - key: GITHUB_BRANCH
-        value: vision-4.0
-      - key: CHROMA_COLLECTION
-        value: chat-with-repo
       - key: CHROMA_NAME
         value: chromadb
       - key: CHROMA_HOST

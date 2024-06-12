@@ -8,8 +8,8 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_t
 from libs.models import ProxyLLMTask
 
 logger = logging.getLogger(__name__)
-timeout = httpx.Timeout(20, read=None)
 rate_limiter = AsyncLimiter(1, 1)
+timeout = httpx.Timeout(20, read=None)
 
 
 @retry(
