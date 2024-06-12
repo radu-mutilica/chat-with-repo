@@ -2,7 +2,7 @@ from libs.models import Model, ProxyLLMTask
 from libs.proxies.providers import corcel
 
 
-summaries = Model(name='cortext-ultra', provider=corcel, endpoint='text/cortext/chat')
+summaries = Model(name='gpt-3.5-turbo', provider=corcel, endpoint='text/cortext/chat')
 
 
 class SummaryTask(ProxyLLMTask):

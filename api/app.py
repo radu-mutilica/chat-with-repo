@@ -14,9 +14,8 @@ from starlette.responses import StreamingResponse
 
 from libs import storage
 from libs.models import RequestData, RAGDocument
-from libs.proxies import embeddings, reranker, stream_task, perform_task
+from libs.proxies import embeddings, reranker, stream_task, perform_task, rephraser
 from libs.proxies.chat import ChatWithRepo, format_context
-from libs.proxies.query_inspector import RephraseGivenHistory
 from libs.utils import register_profiling_middleware
 
 logger = logging.getLogger()
@@ -67,15 +66,17 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         last_message, chat_history = request.last_message(), request.history()
         query, repo = last_message.content.query, last_message.content.repo
 
-        assert repo == 'subnet-19', 'Only able to answer questions about sn19 at the moment'
         # todo: when we get multi repo crawler out, get the github_repo from the crawl_targets
+        assert repo == 'subnet-19', 'Only able to answer questions about sn19 at the moment'
         github_repo = 'vision-4.0'
 
+        # Check for a chat history, and if present, rephrase the query given the history.
+        # This step is important to guarantee good simsearch results further down
         if chat_history:
             start = time.time()
             logger.info('Found a chat history, rephrasing last query...')
             rag_query = await perform_task(
-                RephraseGivenHistory(
+                rephraser.RephraseGivenHistory(
                     query=query,
                     chat_history=chat_history),
                 client=client)

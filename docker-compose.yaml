@@ -32,6 +32,7 @@ services:
       - redis
     networks:
       - net
+    profiles: ['apis']
 
   crawler:
     build:
@@ -62,6 +63,8 @@ services:
       - chromadb
     networks:
       - net
+    profiles: [ 'crawler' ]
+
 
   reranker:
     build:
@@ -86,6 +89,8 @@ services:
       - net
     links:
       - api
+    profiles: [ 'apis' ]
+
 
   chromadb:
     image: chromadb/chroma:latest
@@ -102,6 +107,7 @@ services:
     networks:
       - net
 
+
   redis:
     image: redis:latest
     container_name: redis
@@ -110,6 +116,8 @@ services:
       - "6379:6379"
     networks:
       - net
+    profiles: [ 'apis' ]
+
 
 volumes:
   index_data:

@@ -1,13 +1,13 @@
 from libs.models import ProxyLLMTask, Model
 from libs.proxies.providers import corcel
 
-query_rephrase = Model(name='cortext-ultra', provider=corcel, endpoint='text/cortext/chat')
+query_rephrase = Model(name='gpt-3.5-turbo', provider=corcel, endpoint='text/cortext/chat')
 chat_message_fmt = '{role}: {content}'
 
 
-def strip_new_query(_, text: str) -> str:
+def strip_response(_, text: str) -> str:
     """Helper func to remove prefix from LLM response"""
-    assert 'Rephrased: ' in text
+    assert 'Rephrased: ' in text  # amateur hour...
     return text[10:]
 
 
@@ -31,10 +31,11 @@ class RephraseGivenHistory(ProxyLLMTask):
         "max_tokens": 512
     }
     model = query_rephrase
-    system_prompt = """System: You are an AI assistant that rephrases user queries based on \
+    system_prompt = """You are an AI assistant that rephrases user queries based on \
     conversation context. Analyze the historical chat and current query, then generate a rephrased \
-    query considering the following:
-
+    query.
+    
+    Important:
         1. Identify the main topic or intent of the current query.
         2. Find relevant context from the historical chat to clarify or expand the query.
         3. Incorporate the context into the rephrased query to make it more specific or informative.
@@ -62,4 +63,4 @@ class RephraseGivenHistory(ProxyLLMTask):
     Rephrase this latest query: {query}
     """
     pre_processing_func = format_chat_history
-    post_processing_func = strip_new_query
+    post_processing_func = strip_response
