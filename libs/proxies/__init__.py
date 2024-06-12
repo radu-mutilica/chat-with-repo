@@ -101,35 +101,11 @@ async def stream_task(task: ProxyLLMTask) -> AsyncGenerator:
         "messages": task.prompts.api_format()
     }
 
-    # with open('payload.new2.json', 'w') as outfile:
-    #     import json
-    #     outfile.write(json.dumps(payload))
-
-    # Send the request and stream the response
     async with httpx.AsyncClient().stream(
             'POST',
             url=task.model.url,
             json=payload,
             headers=task.model.provider.headers,
             timeout=timeout) as r:
-        async for chunk in r.aiter_bytes():
+        async for chunk in r.aiter_text():
             yield chunk
-
-# async def run_task(task: ProxyLLMTask) -> str:
-#     """todo: remove this after refactoring"""
-#     payload = {
-#         "model": task.model.name,
-#         "messages": task.prompts.api_format()
-#     }
-#     if task.extra_settings:
-#         payload.update(task.extra_settings)
-#
-#     # Send the request and stream the response
-#     client = httpx.AsyncClient()
-#     response = await client.post(
-#         url=task.model.url,
-#         json=payload,
-#         headers=task.model.provider.headers,
-#         timeout=timeout
-#     )
-#     return response.json()[0]['choices'][0]['delta']['content']

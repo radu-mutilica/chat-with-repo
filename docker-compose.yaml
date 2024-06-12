@@ -16,7 +16,7 @@ services:
     command: uvicorn app:app --reload --host 0.0.0.0 --port 80
     container_name: api
     environment:
-      SIM_SEARCH_TOP_K: "30"
+      SIM_SEARCH_TOP_K: "20"
       REDIS_URL: "redis://redis:6379"
       CHROMA_HOST: "chromadb"
       CHROMA_PORT: "8000"
@@ -25,7 +25,7 @@ services:
       CHROMA_COLLECTION: "chat-with-repo"
       RERANKER_HOST: "reranker"
       RERANKER_PORT: "80"
-      LOG_LEVEL: "DEBUG"
+      LOG_LEVEL: "INFO"
       PROFILING_ENABLED: "FALSE"
     depends_on:
       - chromadb
@@ -80,7 +80,7 @@ services:
           path: ./libs
           target: /app/libs
     environment:
-      CROSSENCODER_TOP_K: "4"
+      CROSSENCODER_TOP_K: "5"
 
     networks:
       - net

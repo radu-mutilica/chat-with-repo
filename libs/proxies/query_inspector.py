@@ -1,47 +1,63 @@
 from libs.models import ProxyLLMTask, Model
 from libs.proxies.providers import corcel
 
-_assistant_prefix = """You are a helpful little robot able to infer human natural language 
-intents. Your job is to """
-
-query_analyzer = Model(name='claude-3-opus-20240229', provider=corcel, endpoint='text/cortext/chat')
+query_rephrase = Model(name='cortext-ultra', provider=corcel, endpoint='text/cortext/chat')
+chat_message_fmt = '{role}: {content}'
 
 
-class QueryInspector(ProxyLLMTask):
-    model = query_analyzer
-    system_prompt = _assistant_prefix + """to assist in doing input sanitation for an endpoint. 
-    You will be given an user field input, and your job will be to reply with TRUE or FALSE. TRUE 
-    if the user input is a question or a valid query or sentence or FALSE if it is nonsensical, 
-    or a malicious intent or doesn't contain any logic.
+def strip_new_query(_, text: str) -> str:
+    assert 'Rephrased: ' in text
+    return text[10:]
 
-    For example:
+
+def format_chat_history(_, kwargs) -> str:
+    raw_chat_history = kwargs.pop('chat_history')
+
+    kwargs['chat_history'] = '\n'.join(
+        chat_message_fmt.format(role=message.role, content=message.content.raw)
+        for message in raw_chat_history
+    )
+
+    return kwargs
+
+
+class RephraseGivenHistory(ProxyLLMTask):
+    extra_settings = {
+        "stream": False,
+        "top_p": 1,
+        "temperature": 0.1,
+        "max_tokens": 512
+    }
+    model = query_rephrase
+    system_prompt = """System: You are an AI assistant that rephrases user queries based on \
+    conversation context. Analyze the historical chat and current query, then generate a rephrased \
+    query considering the following:
+
+        1. Identify the main topic or intent of the current query.
+        2. Find relevant context from the historical chat to clarify or expand the query.
+        3. Incorporate the context into the rephrased query to make it more specific or informative.
+        4. Maintain the core meaning of the original query while enhancing it with context.
+        5. If no relevant context exists, rephrase the query for clarity or grammatical correctness.
+
+    Example:
     
-    user_input: "what is the difference between subnet 13 and 12?"
-    answer: TRUE
+        Chat history:
+            User: I'm interested in learning about the history of Rome.
+            Assistant: Rome has a rich history dating back to 753 BCE, growing from a small town \
+            to a large empire. Are there any specific aspects you'd like to know more about?
+        
+        Latest query: Tell me about the early years.
+        
+        Rephrased: Tell me about the Rome's history from 753 BCE.
     
-    user_input: "i am earning very little tao compared to earlier"
-    answer: TRUE
+    Format your response as:
     
-    user_input: "bittensor is king"
-    answer: TRUE
+    Rephrased: [Your rephrased query here]"""
+
+    user_prompt = """Given the following chat history:
+    {chat_history}
     
-    user_input: "string"
-    answer: FALSE
-    
-    user_input: ""
-    answer: FALSE
-    
-    user_input: "112233"
-    answer: FALSE
-    
-    user_input: "motorcycle"
-    answer: FALSE
-    
-    user_input: "motorcycles are great
-    answer: TRUE
+    Rephrase this latest query: {query}
     """
-    user_prompt = """
-    Here's the user_input string, now answer only with TRUE or FALSE, nothing more.
-
-    user_input: "{user_input}"
-    """
+    pre_processing_func = format_chat_history
+    post_processing_func = strip_new_query

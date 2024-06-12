@@ -13,9 +13,10 @@ from langchain_community.document_transformers import LongContextReorder
 from starlette.responses import StreamingResponse
 
 from libs import storage
-from libs.models import RequestData, ChatQuery, RAGDocument
-from libs.proxies import embeddings, reranker, stream_task
-from libs.proxies.chat import format_context, ChatWithRepo
+from libs.models import RequestData, RAGDocument
+from libs.proxies import embeddings, reranker, stream_task, perform_task
+from libs.proxies.chat import ChatWithRepo, format_context
+from libs.proxies.query_inspector import RephraseGivenHistory
 from libs.utils import register_profiling_middleware
 
 logger = logging.getLogger()
@@ -62,31 +63,40 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        content = request.messages[0].content
-        query, repo = content.query, content.repo
+        # todo: Assume all messages are about the same repo
+        last_message, chat_history = request.last_message(), request.history()
+        query, repo = last_message.content.query, last_message.content.repo
 
         assert repo == 'subnet-19', 'Only able to answer questions about sn19 at the moment'
         # todo: when we get multi repo crawler out, get the github_repo from the crawl_targets
         github_repo = 'vision-4.0'
 
-        expanded_query = ChatQuery(
-            main=query,
-            expansions=[]  # no variants atm, still investigating their usefulness
-        )
+        if chat_history:
+            start = time.time()
+            logger.info('Found a chat history, rephrasing last query...')
+            rag_query = await perform_task(
+                RephraseGivenHistory(
+                    query=query,
+                    chat_history=chat_history),
+                client=client)
+            logger.info(f'Rephrasing task took {time.time() - start:.2f} seconds!')
+        else:
+            rag_query = query
+
         start = time.time()
         context = await rag_context_pipeline(
-            queries=expanded_query,
+            query=rag_query,
             sim_top_k=sim_search_top_k,
             client=client
         )
-        delta_seconds = time.time() - start
-        logger.info(f"{delta_seconds:.2f}s: Context length={len(context)}:\n{context}")
+        logger.info(f"{time.time() - start:.2f}s: Context length={len(context)}:\n{context}")
 
         chat_with_repo_task = ChatWithRepo(
-            question=expanded_query.main,
+            question=rag_query,
             context=context,
             github_name=github_repo,
             repo_name=repo
+
         )
         # Hardcode this to a streaming response. Once this model has support
         # for standard responses, we can fix this
@@ -98,7 +108,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
 
 
 async def rag_context_pipeline(
-        queries: ChatQuery,
+        query: str,
         sim_top_k: int,
         client: httpx.AsyncClient) -> str:
     """Main logic for building the RAG context.
@@ -110,20 +120,20 @@ async def rag_context_pipeline(
         4. Format into a {context} str to insert into the prompt.
 
     Args:
-        queries: (ChatQuery) the user's search queries (expanded).
+        query: (str) the user's search queries.
         sim_top_k: (int) the top_k for the sim search.
         client: (httpx.AsyncClient) the httpx client.
 
     Returns:
-        A string representing the context for the final llm prompt.
+        A str which is the formatted context.
     """
 
     logger.info(f'Searching collection {collection_name}')
 
-    sim_vectors = await sim_search(queries, sim_top_k, client)
+    sim_vectors = await sim_search(query, sim_top_k, client)
 
     start = time.time()
-    ranks = reranker.rerank(queries.main, sim_vectors['documents'][0], client)
+    ranks = reranker.rerank(query, sim_vectors['documents'][0], client)
     logger.info(f'Got new ranks from reranker, took {time.time() - start:.2f}s')
 
     # Build a list with only the ranked documents, these are the final ones that
@@ -144,11 +154,11 @@ async def rag_context_pipeline(
     return format_context(ordered_documents)
 
 
-async def sim_search(queries: ChatQuery, sim_top_k: int, client: httpx.AsyncClient):
+async def sim_search(query: str, sim_top_k: int, client: httpx.AsyncClient):
     """Perform a similarity search on the database and find top_k related vectors.
 
     Args:
-        queries: (ChatQuery) the user's search queries.
+        query: (str) the user's search query.
         sim_top_k: (int) the top_k for the sim search.
         client: (httpx.AsyncClient) the httpx client.
 
@@ -156,7 +166,7 @@ async def sim_search(queries: ChatQuery, sim_top_k: int, client: httpx.AsyncClie
         Top similar vectors.
     """
     start = time.time()
-    search_query_embedding = await embeddings.generate_embedding(queries.main, client)
+    search_query_embedding = await embeddings.generate_embedding(query, client)
     logger.info(f'Embedding took {time.time() - start:.2f}s')
 
     start = time.time()
@@ -167,5 +177,3 @@ async def sim_search(queries: ChatQuery, sim_top_k: int, client: httpx.AsyncClie
     logger.info(f'Simsearch took {time.time() - start:.2f}s')
 
     return sim_vectors
-
-
