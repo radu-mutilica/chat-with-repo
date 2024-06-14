@@ -1,9 +1,4 @@
 services:
-  - type: redis
-    plan: standard
-    name: redis
-    region: frankfurt
-    ipAllowList: [ ]
 
   - type: pserv
     name: chroma
@@ -156,5 +151,13 @@ services:
       name: stats
       mountPath: /data/db
       sizeGB: 5
+
+
+  - type: redis
+    plan: standard
+    name: redis
+    region: frankfurt
+    ipAllowList: []
+
 
 version: "1"
