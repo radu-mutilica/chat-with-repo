@@ -115,11 +115,16 @@ services:
           name: chroma
           type: pserv
           property: port
-      - key: MONGO_URL
+      - key: MONGO_HOST
         fromService:
           name: mongodb
           type: pserv
-          property: connectionString
+          property: host
+      - key: MONGO_PORT
+        fromService:
+          name: mongodb
+          type: pserv
+          property: port
       - fromGroup: veggie-scout-envs
 
     region: frankfurt

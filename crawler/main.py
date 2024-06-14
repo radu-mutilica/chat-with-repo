@@ -24,7 +24,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 github_api_url = 'https://api.github.com/repos/'
-mongo_url = f'{os.environ["MONGO_URL"]}/stats'
+mongo_url = f'mongodb://{os.environ["MONGO_HOST"]}:{os.environ["MONGO_PORT"]}/stats'
 github_access_token = os.environ['GITHUB_API_KEY']
 github_api_headers = {
     "Authorization": f"token {github_access_token}"
