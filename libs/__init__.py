@@ -16,6 +16,12 @@ crawl_targets = {
         'branch': 'vision-4.0',
         'name': 'vision',
         'target_collection': 'subnet19'
+    },
+    'myself': {
+        'url': 'https://github.com/radu-mutilica/chat-with-repo',
+        'branch': 'master',
+        'name': 'chat-with-repo',
+        'target_collection': 'myself'
     }
 
     # 'subnet-1': 'https://github.com/macrocosm-os/prompting',
