@@ -42,7 +42,7 @@ services:
         sync: false
       - key: REDIS_URL
         fromService:
-          name: dev-redis
+          name: redis
           type: pserv
           property: connectionString
       - key: CHROMA_HOST
