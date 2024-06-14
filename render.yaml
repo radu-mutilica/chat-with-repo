@@ -117,7 +117,7 @@ services:
           property: port
       - key: MONGO_URL
         fromService:
-          name: stats
+          name: mongodb
           type: pserv
           property: connectionString
       - fromGroup: veggie-scout-envs
