@@ -1,7 +1,24 @@
+# If you add a subnet here it will get crawled
+#   'url': github url e.g. 'https://github.com/corcel-api/cortex.t',
+#   'branch': e.g. 'main',
+#   'name': human readable name e.g. 'cortex.t',
+#   'target_collection': name of vector db collection, e.g. 'subnet18'
+
 crawl_targets = {
-    'subnet-1': 'https://github.com/macrocosm-os/prompting',
-    'subnet-2': 'https://github.com/inference-labs-inc/omron-subnet',
-    'subnet-3': 'https://github.com/myshell-ai/MyShell-TTS-Subnet',
+    'subnet-18': {
+        'url': 'https://github.com/corcel-api/cortex.t',
+        'branch': 'main',
+        'name': 'cortex.t',
+        'target_collection': 'subnet18'
+    },
+    'subnet-19': {
+        'url': 'https://github.com/namoray/vision',
+        'branch': 'vision-4.0',
+        'name': 'vision',
+        'target_collection': 'subnet19'
+    }
+
+    # 'subnet-1': 'https://github.com/macrocosm-os/prompting',
     # 'subnet-4': 'https://github.com/manifold-inc/targon',
     # 'subnet-5': 'https://github.com/OpenKaito/openkaito',
     # 'subnet-6': 'https://github.com/gitphantomman/d3_subnet',
@@ -17,7 +34,6 @@ crawl_targets = {
     # 'subnet-16': 'https://github.com/eseckft/BitAds.ai',
     # 'subnet-17': 'https://github.com/404-Repo/three-gen-subnet',
     # 'subnet-18': 'https://github.com/corcel-api/cortex.t',
-    # 'subnet-19': 'https://github.com/namoray/vision',
     # 'subnet-20': 'https://github.com/RogueTensor/bitagent_subnet',
     # 'subnet-21': 'https://github.com/ifrit98/storage-subnet',
     # 'subnet-22': 'https://github.com/Datura-ai/smart-scrape',
@@ -33,6 +49,6 @@ crawl_targets = {
     # 'subnet-32': 'https://github.com/It-s-AI/llm-detection',
     # 'subnet-33': 'https://github.com/afterpartyai/bittensor-conversation-genome-project',
     # 'subnet-34': 'https://github.com/Healthi-Labs/healthi-subnet',
-    # # subnet-35'
+    # subnet-35'
     # 'subnet-36': 'https://github.com/HIP-Labs/HIP-Subnet'
 }

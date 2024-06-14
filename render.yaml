@@ -115,6 +115,11 @@ services:
           name: chroma
           type: pserv
           property: port
+      - key: MONGO_URL
+        fromService:
+          name: stats
+          type: pserv
+          property: connectionString
       - fromGroup: veggie-scout-envs
 
     region: frankfurt
@@ -123,6 +128,7 @@ services:
     dockerContext: .
     dockerfilePath: ./crawler/Dockerfile
     rootDir: .
+
     buildFilter:
       ignoredPaths:
         - api/**
@@ -132,6 +138,18 @@ services:
     plan: standard
     name: redis
     region: frankfurt
-    ipAllowList: [] # Only allow internal connections
+    ipAllowList: []
+
+
+  - type: pserv
+    name: mongodb
+    plan: standard
+    runtime: docker
+    autoDeploy: false
+    region: frankfurt
+    disk:
+      name: stats
+      mountPath: /data/db
+      sizeGB: 5
 
 version: "1"

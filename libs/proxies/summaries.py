@@ -2,14 +2,14 @@ from libs.models import Model, ProxyLLMTask
 from libs.proxies.providers import corcel
 
 
-summaries = Model(name='gpt-3.5-turbo', provider=corcel, endpoint='text/cortext/chat')
+summaries = Model(name='gpt-4o', provider=corcel, endpoint='text/cortext/chat')
 
 
 class SummaryTask(ProxyLLMTask):
     extra_settings = {
         "stream": False,
         "top_p": 1,
-        "temperature": 0.0001,
+        "temperature": 0.1,
         "max_tokens": 4096
     }
 

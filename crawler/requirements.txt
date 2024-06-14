@@ -11,3 +11,4 @@ chromadb-client~=0.4.25.dev0
 openai~=1.30.5
 aiolimiter~=1.1.0
 tenacity~=8.3.0
+pymongo
