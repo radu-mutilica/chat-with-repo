@@ -141,16 +141,19 @@ services:
         - reranker/**
 
 
-#  - type: pserv
-#    name: mongodb
-#    plan: standard
-#    runtime: docker
-#    autoDeploy: false
-#    region: frankfurt
-#    disk:
-#      name: stats
-#      mountPath: /data/db
-#      sizeGB: 5
+  - type: pserv
+    name: mongodb
+    runtime: docker
+    repo: https://github.com/render-examples/mongodb
+    plan: standard
+    region: frankfurt
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    disk:
+      name: stats
+      mountPath: /data/db
+      sizeGB: 5
+    autoDeploy: false
 
 
   - type: redis
