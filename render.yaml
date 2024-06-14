@@ -1,4 +1,10 @@
 services:
+  - type: redis
+    plan: standard
+    name: dev-redis
+    region: frankfurt
+    ipAllowList: [ ]
+
   - type: pserv
     name: dev-chroma
     runtime: image
@@ -138,12 +144,6 @@ services:
       ignoredPaths:
         - api/**
         - reranker/**
-
-  - type: redis
-    plan: standard
-    name: dev-redis
-    region: frankfurt
-    ipAllowList: []
 
 
   - type: pserv
