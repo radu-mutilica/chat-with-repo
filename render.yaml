@@ -1,6 +1,6 @@
 services:
   - type: pserv
-    name: chroma
+    name: dev-chroma
     runtime: image
     image:
       url: docker.io/chromadb/chroma:latest
@@ -21,7 +21,7 @@ services:
       sizeGB: 5
 
   - type: web
-    name: api
+    name: dev-api
     runtime: docker
     repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
@@ -41,22 +41,22 @@ services:
           property: connectionString
       - key: CHROMA_HOST
         fromService:
-          name: chroma
+          name: dev-chroma
           type: pserv
           property: host
       - key: CHROMA_PORT
         fromService:
-          name: chroma
+          name: dev-chroma
           type: pserv
           property: port
       - key: RERANKER_HOST
         fromService:
-          name: reranker
+          name: dev-reranker
           type: pserv
           property: host
       - key: RERANKER_PORT
         fromService:
-          name: reranker
+          name: dev-reranker
           type: pserv
           property: port
       - fromGroup: veggie-scout-envs
@@ -71,7 +71,7 @@ services:
     rootDir: .
 
   - type: pserv
-    name: reranker
+    name: dev-reranker
     runtime: docker
     repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
@@ -92,7 +92,7 @@ services:
     rootDir: .
 
   - type: cron
-    name: crawler
+    name: dev-crawler
     runtime: docker
     repo: https://github.com/radu-mutilica/chat-with-repo
     plan: standard
@@ -107,22 +107,22 @@ services:
         value: chromadb
       - key: CHROMA_HOST
         fromService:
-          name: chroma
+          name: dev-chroma
           type: pserv
           property: host
       - key: CHROMA_PORT
         fromService:
-          name: chroma
+          name: dev-chroma
           type: pserv
           property: port
       - key: MONGO_HOST
         fromService:
-          name: mongodb
+          name: dev-mongodb
           type: pserv
           property: host
       - key: MONGO_PORT
         fromService:
-          name: mongodb
+          name: dev-mongodb
           type: pserv
           property: port
       - fromGroup: veggie-scout-envs
@@ -141,13 +141,13 @@ services:
 
   - type: redis
     plan: standard
-    name: redis
+    name: dev-redis
     region: frankfurt
     ipAllowList: []
 
 
   - type: pserv
-    name: mongodb
+    name: dev-mongodb
     plan: standard
     runtime: docker
     autoDeploy: false
