@@ -68,9 +68,11 @@ class VectorDBCollection:
 
 
 class StatsDB:
+
     def __init__(self, connection_string):
         self.client = MongoClient(connection_string)
         self.db = self.client.get_default_database()
+        self.collection = self.db['stats']
 
     def log_finished_crawl(self, stats, collection_name):
         collection = self.db[collection_name]
@@ -78,8 +80,7 @@ class StatsDB:
         return result.inserted_id
 
     def get_last_commit(self, repo):
-        collection = self.db['crawls']
-        repo_crawl_stats = collection.find_one(
+        repo_crawl_stats = self.collection.find_one(
             {'_id': repo},
         )
 
@@ -89,11 +90,11 @@ class StatsDB:
             return 0
 
     def set_last_commit(self, repo, ts):
-        collection = self.db['crawls']
-        collection.insert_one(
-            {
+        self.collection.update_one(
+            {'_id': repo},
+            {'$set': {
                 '_id': repo,
                 'last_commit': ts
-            },
+            }},
             upsert=True
         )

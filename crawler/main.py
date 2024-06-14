@@ -23,10 +23,8 @@ handler.setLevel(os.environ['LOG_LEVEL'])
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-
-commit_history_json_path = os.path.join(os.environ['DATA_PATH'], 'last_repository_commits.json')
 github_api_url = 'https://api.github.com/repos/'
-mongo_url = os.environ['MONGO_URL']
+mongo_url = f'{os.environ["MONGO_URL"]}/stats'
 github_access_token = os.environ['GITHUB_API_KEY']
 github_api_headers = {
     "Authorization": f"token {github_access_token}"
@@ -165,11 +163,15 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
 
         # If no collection present, then just go ahead and crawl
         if not crawl_config['target_collection'] in all_collections:
+            logger.info(f'Collection missing target={subnet}. Crawling...')
             will_crawl = True
         else:  # If collection exists, check the latest commit timestamp
             logger.info(f'Collection present target={subnet}. Checking last commit...')
 
-            if stats.get_last_commit(subnet) < last_commit_ts:
+            last_crawled_commit_ts = stats.get_last_commit(subnet)
+            if last_crawled_commit_ts < last_commit_ts:
+                logger.info(f'Old last commit ts={last_crawled_commit_ts} target={subnet}, '
+                            f'new one {last_commit_ts}. Crawling...')
                 will_crawl = True
             else:
                 logger.info(f'Skipping target={subnet}. Latest commit @ {last_commit_ts}')
