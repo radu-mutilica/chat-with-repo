@@ -3,14 +3,14 @@ import time
 import httpx
 from langchain_community.document_transformers import LongContextReorder
 
-from api.app import logger
+import logging
 from libs import storage
 from libs.models import RAGDocument
 from libs.proxies import reranker, embeddings
 from libs.proxies.chat import format_context
 
 long_context_reorder = LongContextReorder()
-
+logger = logging.getLogger(__name__)
 
 async def context_pipeline(
         query: str,

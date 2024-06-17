@@ -61,7 +61,7 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        return answer_query(request.last_message(), request.history(), client)
+        return await answer_query(request.last_message(), request.history(), client)
 
     except AssertionError:
         raise HTTPException(status_code=400, detail='Not a valid repository')
