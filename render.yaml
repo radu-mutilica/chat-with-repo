@@ -28,7 +28,7 @@ services:
     plan: standard
     envVars:
       - key: SIM_SEARCH_TOP_K
-        value: 30
+        value: 35
       - key: LOG_LEVEL
         value: INFO
       - key: CHROMA_PASSWORD
