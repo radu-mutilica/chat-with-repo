@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from typing import List
 
 import httpx
 import redis.asyncio as redis
@@ -9,14 +10,13 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi_limiter import FastAPILimiter
 from fastapi_limiter.depends import RateLimiter
 from httpx import AsyncClient
-from langchain_community.document_transformers import LongContextReorder
 from starlette.responses import StreamingResponse
 
+import rag
 from libs import crawl_targets
-from libs import storage
-from libs.models import RequestData, RAGDocument
-from libs.proxies import embeddings, reranker, stream_task, perform_task, rephraser
-from libs.proxies.chat import ChatWithRepo, format_context
+from libs.models import RequestData, Message
+from libs.proxies import stream_task, perform_task, rephraser
+from libs.proxies.chat import ChatWithRepo
 from libs.utils import register_profiling_middleware
 
 logger = logging.getLogger()
@@ -42,7 +42,6 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 register_profiling_middleware(app)
-long_context_reorder = LongContextReorder()
 
 
 async def get_client():
@@ -62,124 +61,67 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        # todo: Assume all messages are about the same repo
-        last_message, chat_history = request.last_message(), request.history()
-        query, subnet = last_message.content.query, last_message.content.repo
-
-        assert subnet in crawl_targets, "Not a valid repo"
-
-        # Check for a chat history, and if present, rephrase the query given the history.
-        # This step is important to guarantee good simsearch results further down
-        if chat_history:
-            start = time.time()
-            logger.info('Found a chat history, rephrasing last query...')
-            rag_query = await perform_task(
-                rephraser.RephraseGivenHistory(
-                    query=query,
-                    chat_history=chat_history),
-                client=client)
-            logger.info(f'Rephrasing task took {time.time() - start:.2f} seconds!')
-        else:
-            rag_query = query
-
-        start = time.time()
-        context = await rag_context_pipeline(
-            collection=crawl_targets[subnet]['target_collection'],
-            query=rag_query,
-            sim_top_k=sim_search_top_k,
-            client=client
-        )
-        logger.info(f"{time.time() - start:.2f}s: Context length={len(context)}:\n{context}")
-
-        chat_with_repo_task = ChatWithRepo(
-            question=rag_query,
-            context=context,
-            github_name=crawl_targets[subnet]['name'],
-            repo_name=subnet
-
-        )
-        # Hardcode this to a streaming response. Once this model has support
-        # for standard responses, we can fix this
-        return StreamingResponse(stream_task(chat_with_repo_task))
+        return answer_query(request.last_message(), request.history(), client)
 
     except AssertionError:
-        raise HTTPException(status_code=400, detail="Not a valid repository")
+        raise HTTPException(status_code=400, detail='Not a valid repository')
 
     except Exception:
-        logger.exception('Failed to fulfill request because:')
-        raise HTTPException(status_code=500, detail="An error occurred while processing the query")
+        raise HTTPException(status_code=500, detail='An error occurred while processing the query')
 
 
-async def rag_context_pipeline(
-        query: str,
-        collection: str,
-        sim_top_k: int,
-        client: httpx.AsyncClient) -> str:
-    """Main logic for building the RAG context.
-
-    The pipeline consists of the following steps:
-        1. Perform a similarity search using the query.
-        2. Send documents to reranker.
-        3. Reorder for "long context".
-        4. Format into a {context} str to insert into the prompt.
+async def answer_query(
+        last_message: Message,
+        chat_history: List[Message],
+        client: AsyncClient) -> StreamingResponse:
+    """Do some query processing first, check if there is any chat history, create
+    an llm prompt based on the previous facts and send it over to the llm.
 
     Args:
-        query: (str) the user's search query.
-        collection: (str) the vector db collection name.
-        sim_top_k: (int) the top_k for the sim search.
-        client: (httpx.AsyncClient) the httpx client.
+        last_message (Message): the last message aka the user query.
+        chat_history (List[Message]): the chat history, might be an empty list.
+        client: (httpx.AsyncClient) the client.
 
     Returns:
-        A str which is the formatted context.
+        StreamingResponse from the LLM.
     """
+    # todo: Assume all messages are about the same repo
+    query, subnet = last_message.content.query, last_message.content.repo
 
-    logger.info(f'Searching collection {collection}')
+    assert subnet in crawl_targets, 'Not a valid repo'
 
-    sim_vectors = await sim_search(query, collection, sim_top_k, client)
-
-    start = time.time()
-    ranks = reranker.rerank(query, sim_vectors['documents'][0], client)
-    logger.info(f'Got new ranks from reranker, took {time.time() - start:.2f}s')
-
-    # Build a list with only the ranked documents, these are the final ones that
-    # are used for formatting the RAG context
-    documents = []
-    for content, metadata in zip(sim_vectors['documents'][0], sim_vectors['metadatas'][0]):
-        documents.append(RAGDocument(page_content=content, metadata=metadata))
-
-    ranked_documents = []
-    for rank in await ranks:
-        ranked_documents.append(
-            documents[int(rank['corpus_id'])],
-        )
-
-    # Final touches, apply a long context reorder to mitigate the "lost in the middle" effect
-    ordered_documents = long_context_reorder.transform_documents(ranked_documents)
-
-    return format_context(ordered_documents)
-
-
-async def sim_search(query: str, collection: str, sim_top_k: int, client: httpx.AsyncClient):
-    """Perform a similarity search on the database and find top_k related vectors.
-
-    Args:
-        query: (str) the user's search query.
-        collection: (str) the vector db collection name.
-        sim_top_k: (int) the top_k for the sim search.
-        client: (httpx.AsyncClient) the httpx client.
-
-    Returns:
-        Top similar vectors.
-    """
-    start = time.time()
-    search_query_embedding = await embeddings.generate_embedding(query, client)
-    logger.info(f'Embedding took {time.time() - start:.2f}s')
+    # Check for a chat history, and if present, rephrase the query given the history.
+    # This step is important to guarantee good simsearch results further down
+    if chat_history:
+        start = time.time()
+        logger.info('Found a chat history, rephrasing last query...')
+        rag_query = await perform_task(
+            rephraser.RephraseGivenHistory(
+                query=query,
+                chat_history=chat_history),
+            client=client)
+        logger.info(f'Rephrasing task took {time.time() - start:.2f} seconds!')
+    else:
+        rag_query = query
 
     start = time.time()
-    sim_vectors = storage.get_db(collection).query(
-        query_embeddings=search_query_embedding,
-        n_results=sim_top_k
+    context = await rag.context_pipeline(
+        collection=crawl_targets[subnet]['target_collection'],
+        query=rag_query,
+        sim_top_k=sim_search_top_k,
+        client=client
     )
-    logger.info(f'Simsearch took {time.time() - start:.2f}s')
+    logger.info(f"{time.time() - start:.2f}s: Context length={len(context)}:\n{context}")
 
-    return sim_vectors
+    chat_with_repo_task = ChatWithRepo(
+        question=rag_query,
+        context=context,
+        github_name=crawl_targets[subnet]['name'],
+        repo_name=subnet
+
+    )
+    # Hardcode this to a streaming response. Once this model has support
+    # for standard responses, we can fix this
+    return StreamingResponse(stream_task(chat_with_repo_task))
+
+
