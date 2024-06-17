@@ -136,6 +136,7 @@ async def crawl(targets):
 
 
 async def get_last_commit_ts(url: str, branch: str, client: httpx.AsyncClient) -> int:
+    """Helper function to get the last commit timestamp for a repo"""
     repo_parts = url.rstrip('/').split('/')
     owner = repo_parts[-2]
     repo = repo_parts[-1]
@@ -162,11 +163,12 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
             crawl_config['url'], crawl_config['branch'], client)
 
         # If no collection present, then just go ahead and crawl
-        if not crawl_config['target_collection'] in all_collections:
-            logger.info(f'Collection missing target={subnet}. Crawling...')
+        target_collection = crawl_config['target_collection']
+        if target_collection not in all_collections:
+            logger.info(f'Collection missing target={target_collection}. Crawling...')
             will_crawl = True
         else:  # If collection exists, check the latest commit timestamp
-            logger.info(f'Collection present target={subnet}. Checking last commit...')
+            logger.info(f'Collection present target={target_collection}. Checking last commit...')
 
             last_crawled_commit_ts = stats.get_last_commit(subnet)
             if last_crawled_commit_ts < last_commit_ts:
@@ -174,7 +176,7 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
                             f'new one {last_commit_ts}. Crawling...')
                 will_crawl = True
             else:
-                logger.info(f'Skipping target={subnet}. Latest commit @ {last_commit_ts}')
+                logger.info(f'Skipping target={target_collection}. Last commit @ {last_commit_ts}')
 
         if will_crawl:
             yield subnet, crawl_config
