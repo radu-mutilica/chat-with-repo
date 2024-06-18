@@ -89,7 +89,6 @@ async def split_document(
             file_path=document.metadata['file_path'],
             content=document.page_content,
             language=language
-
         ),
         client=client
     )

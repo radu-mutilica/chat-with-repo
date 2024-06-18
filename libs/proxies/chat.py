@@ -8,7 +8,7 @@ from libs.proxies.providers import corcel
 
 logger = logging.getLogger(__name__)
 
-chat = Model(name='llama-3', provider=corcel, endpoint='text/vision/chat')
+chat = Model(name='gpt-4o', provider=corcel, endpoint='text/cortext/chat')
 
 prompt_separator = '\n\n' + '-' * 9 + '\n'
 
@@ -16,7 +16,8 @@ prompt_separator = '\n\n' + '-' * 9 + '\n'
 class ChatWithRepo(ProxyLLMTask):
     extra_settings = {
         "temperature": 0.0001,
-        "max_tokens": 4096
+        "max_tokens": 2048,
+        "top_p": 1,
     }
 
     model = chat
@@ -119,7 +120,7 @@ class ChatWithRepo(ProxyLLMTask):
         
             {context}
     
-        ---------
+            ---------
         
         Important: 
             - Use present tense, maintaining an authoritative yet helpful tone.

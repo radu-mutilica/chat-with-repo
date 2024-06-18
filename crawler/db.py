@@ -4,6 +4,7 @@ import os
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+from pymongo import MongoClient
 
 logger = logging.getLogger(__name__)
 emb_fn = OpenAIEmbeddingFunction(
@@ -64,3 +65,36 @@ class VectorDBCollection:
 
         logger.info(f'Successfully created new {self._main_collection} '
                     f'with a total vector count of {new_collection.count()}')
+
+
+class StatsDB:
+
+    def __init__(self, connection_string):
+        self.client = MongoClient(connection_string)
+        self.db = self.client.get_default_database()
+        self.collection = self.db['stats']
+
+    def log_finished_crawl(self, stats, collection_name):
+        collection = self.db[collection_name]
+        result = collection.insert_one(stats)
+        return result.inserted_id
+
+    def get_last_commit(self, repo):
+        repo_crawl_stats = self.collection.find_one(
+            {'_id': repo},
+        )
+
+        if repo_crawl_stats:
+            return repo_crawl_stats['last_commit']
+        else:
+            return 0
+
+    def set_last_commit(self, repo, ts):
+        self.collection.update_one(
+            {'_id': repo},
+            {'$set': {
+                '_id': repo,
+                'last_commit': ts
+            }},
+            upsert=True
+        )

@@ -97,19 +97,38 @@ class RankContent(BaseModel):
     documents: List[str]
 
 
-class ChatContent(BaseModel):
+class ChatAnswer(BaseModel):
+    answer: str
+    repo: str
+
+    @property
+    def raw(self):
+        return self.answer
+
+
+class ChatQuery(BaseModel):
     query: str
     repo: str
+
+    @property
+    def raw(self):
+        return self.query
 
 
 class Message(BaseModel):
     role: str = 'user'
-    content: ChatContent | RankContent
+    content: ChatQuery | ChatAnswer | RankContent
 
 
 class RequestData(BaseModel):
     model: str = 'model_name'
     messages: List[Message]
+
+    def history(self):
+        return self.messages[:-1]
+
+    def last_message(self):
+        return self.messages[-1]
 
 
 class ProxyLLMTask:
@@ -118,8 +137,12 @@ class ProxyLLMTask:
     model = None
     extra_settings = None
     post_processing_func = None
+    pre_processing_func = None
 
     def __init__(self, **kwargs):
+        if self.pre_processing_func:
+            kwargs = self.pre_processing_func(kwargs)
+
         system_prompt = self.system_prompt.format(**kwargs)
         user_prompt = self.user_prompt.format(**kwargs)
 
@@ -133,15 +156,6 @@ class ProxyLLMTask:
 class DocumentRank(BaseModel):
     corpus_id: int
     score: float
-
-
-class ChatQuery(BaseModel):
-    main: str
-    expansions: List[str]
-
-    @property
-    def all(self):
-        return [self.main] + self.expansions
 
 
 contextual_file_fmt = """

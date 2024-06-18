@@ -4,39 +4,39 @@ import os
 import tempfile
 
 import httpx
-from directory_tree import display_tree
-from langchain_community.document_loaders import GitLoader
 
 import db
-from libs import splitting
-from libs.models import Repo
+from libs import splitting, crawl_targets
 from libs.proxies import perform_task, summaries
+from repository import load_repo, check_if_crawl_needed
 
+log_level = os.environ['LOG_LEVEL']
 logger = logging.getLogger()
-logger.setLevel(os.environ['LOG_LEVEL'])
+logger.setLevel(log_level)
 handler = logging.StreamHandler()
-handler.setLevel(os.environ['LOG_LEVEL'])
+handler.setLevel(log_level)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-github_url = os.environ['GITHUB_URL']
-github_branch = os.environ['GITHUB_BRANCH']
 
-
-async def main():
+async def crawl_repo(url: str, branch: str, target_collection: str, client: httpx.AsyncClient):
     """Main crawler function.
 
     This holds most of the crawling logic, while using LLM calls to also summarize various
     entities (the repo itself, files and code snippets).
 
+    Args:
+        url (str): The repository URL.
+        branch (str): The repository branch.
+        target_collection (str): The target collection for the database.
+        client (httpx.AsyncClient): The httpx client to use.
+
     Once crawled and processed, insert everything into a chroma collection.
     """
-    client = httpx.AsyncClient()
-    with tempfile.TemporaryDirectory() as local_path:
-
-        logger.info(f'Loading following repository: {github_url}:{github_branch} at {local_path}')
-        repo = load_repo(github_url, local_path, branch=github_branch)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        logger.info(f'Loading repository "{url}:{branch}" at {tmp_dir}')
+        repo = await load_repo(url, branch, tmp_dir)
 
         # Find and expand the root readme file to embed all the other referenced .md files.
         # This block of (hopefully) high-level repo knowledge is used to perform a repo summary.
@@ -48,15 +48,13 @@ async def main():
         )
         repo_summary = await perform_task(repo_summary_task, client)
         repo.summary = repo_summary
-        logger.info(f'Summarized repo summary task: {repo_summary}')
 
         chunks = await splitting.split_documents(
             repo=repo,
             client=client
         )
 
-        logger.info(f'Found {len(chunks)} chunks')
-        with db.VectorDBCollection(os.environ['CHROMA_COLLECTION']) as vecdb_client:
+        with db.VectorDBCollection(collection_name=target_collection) as vecdb_client:
             vecdb_client.add(
                 documents=[chunk.page_content for chunk in chunks],
                 metadatas=[chunk.metadata for chunk in chunks],
@@ -65,24 +63,23 @@ async def main():
             )
 
 
-def load_repo(url: str, temp_path: str, branch='main') -> Repo:
-    """Helper function to load a git repo"""
-    name = url.rsplit('/', maxsplit=1)[-1]
-    root_path = f'{temp_path}/{name}'
-    os.makedirs(root_path)
+async def crawl(targets):
+    """Helper function to create all crawling tasks (one per repo defined in the yaml file)"""
+    client = httpx.AsyncClient()
 
-    git_loader = GitLoader(clone_url=url, repo_path=root_path, branch=branch)
+    tasks = [
+        asyncio.create_task(crawl_repo(
+            url=crawl_config['url'],
+            branch=crawl_config['branch'],
+            target_collection=crawl_config['target_collection'],
+            client=client
+        ))
+        async for subnet, crawl_config in check_if_crawl_needed(targets, client)
+    ]
 
-    repo = Repo(
-        name=name,
-        branch=branch,
-        url=url,
-        documents=git_loader.load(),
-        tree=display_tree(root_path, string_rep=True),
-    )
-    return repo
+    await asyncio.gather(*tasks)
 
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(crawl(crawl_targets))
