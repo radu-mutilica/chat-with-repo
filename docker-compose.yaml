@@ -90,6 +90,7 @@ services:
       - net
     links:
       - api
+      - evaluation
     profiles: [ 'apis' ]
 
 
@@ -127,13 +128,36 @@ services:
       - "27017:27017"
     networks:
       - net
-#    environment:
-#        MONGO_INITDB_DATABASE: 'init'
-#      MONGO_INITDB_ROOT_USERNAME: root
-#      MONGO_INITDB_ROOT_PASSWORD: pls_add_persistent_disks_to_render
     volumes:
       - crawl_stats_data:/data/db
     profiles: [ 'crawler']
+
+  evaluation:
+    build:
+      context: .
+      dockerfile: evaluation/Dockerfile
+    container_name: evaluation
+    command: python -m pytest -s --capture=no .
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./evaluation
+          target: /app
+        - action: sync+restart
+          path: ./libs
+          target: /app/libs
+    environment:
+      CORCEL_API_KEY: "${CORCEL_API_KEY}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      CHROMA_HOST: "chromadb"
+      CHROMA_PORT: "8000"
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+      LOG_LEVEL: "INFO"
+    networks:
+      - net
+    depends_on:
+      - chromadb
 
 volumes:
   index_data:

@@ -8,6 +8,11 @@ WORKDIR /app
 COPY evaluation .
 COPY libs libs/
 
+# Needed for ragas package
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y git
+
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001

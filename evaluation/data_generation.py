@@ -1,7 +1,6 @@
 import logging
 import os
 import pathlib
-import time
 
 from datasets import load_dataset
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -23,13 +22,15 @@ logger.setLevel(logging.DEBUG)
 
 generator_llm_model = 'gpt-3.5-turbo-16k'
 critic_llm_model = 'gpt-4'
-test_set_json_path = pathlib.Path(__file__).parent.resolve() / 'data' / 'chat-with-repo.json'
+test_set_json_path = pathlib.Path(__file__).parent.resolve() / 'data' / '{collection}.json'
 
 
 def load_test_set(collection_name: str):
-    if not os.path.isfile(test_set_json_path):
-        collection = get_db(collection_name)
+    collection_test_set_json_path = str(test_set_json_path).format(collection=collection_name)
+    if not os.path.isfile(collection_test_set_json_path):
         logger.info(f'Generating test data using collection "{collection_name}"')
+
+        collection = get_db(collection_name)
 
         documents = []
         data = collection.get(include=['metadatas', 'documents', 'embeddings'])
@@ -53,7 +54,7 @@ def load_test_set(collection_name: str):
 
         test_set = generator.generate_with_langchain_docs(
             documents,
-            test_size=1,
+            test_size=10,
             distributions={
                 simple: 0.5,
                 reasoning: 0.25,
@@ -63,15 +64,14 @@ def load_test_set(collection_name: str):
                 max_workers=1
             ),
             is_async=False,
-            raise_exceptions=False
 
         ).to_dataset()
         logger.info('Finished generating test set!')
-        test_set.to_json(test_set_json_path)
-        logger.info(f'Saved test set to "{test_set_json_path}"')
+        test_set.to_json(collection_test_set_json_path)
+        logger.info(f'Saved test set to "{collection_test_set_json_path}"')
 
         return test_set.to_dict()
 
     else:
         logger.info('Found test set json file "{test_set_json_path}"')
-        return load_dataset(path=str(test_set_json_path.parent))
+        return load_dataset(path=collection_test_set_json_path)
