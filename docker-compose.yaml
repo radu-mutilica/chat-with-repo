@@ -137,7 +137,11 @@ services:
       context: .
       dockerfile: evaluation/Dockerfile
     container_name: evaluation
-    command: python -m pytest -s --capture=no .
+    volumes:
+      - evaluation_data:/app/evaluation/data
+#    command: python -m pytest -s --capture=no .
+    command: deepeval test run deepeval_suite/test_chat_with_repo.py
+#    command: python deepeval_suite/test_chat_with_repo.py
     develop:
       watch:
         - action: sync+restart
@@ -163,6 +167,8 @@ volumes:
   index_data:
     driver: local
   crawl_stats_data:
+    driver: local
+  evaluation_data:
     driver: local
 
 
