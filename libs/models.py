@@ -189,3 +189,19 @@ class RAGDocument(Document):
                     raw_code=self.metadata['original_page_content']
                 )
             )
+
+
+class ChunkContent(BaseModel):
+    content: str
+
+
+class ChunkMessage(BaseModel):
+    delta: ChunkContent
+
+
+class LLMResponseChunk(BaseModel):
+    choices: List[ChunkMessage]
+
+    @property
+    def raw(self):
+        return self.choices[0].delta.content.strip()

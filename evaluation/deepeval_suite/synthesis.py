@@ -1,72 +1,40 @@
-import datetime
+import logging
 import os
 import pathlib
+import time
 
 import chromadb
 from chromadb import Settings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from deepeval.dataset import EvaluationDataset
+from deepeval.synthesizer import Synthesizer
+from .utils import RAGChunker
+from deepeval.synthesizer import doc_chunker
+# Monkey Patching the DocumentChunker with MyDocumentChunker
+doc_chunker.DocumentChunker = RAGChunker
 
 test_set_json_path = pathlib.Path(__file__).parent.resolve() / 'data' / '{collection}'
 
-
-def find_last_dataset(path: str):
-    datasets = []
-    for f in os.listdir(path):
-        if f.endswith('.json'):
-            datasets.append(f)
-
-    # 20240620_101401
-    datasets = sorted(datasets, key=lambda x: parse_ts(x.split('.')[0]), reverse=True)
-
-    return datasets[0]
+logger = logging.getLogger(__name__)
 
 
-def parse_ts(timestamp: str):
-    return datetime.datetime.strptime(timestamp, "%Y%m%d_%H%M%S").timestamp()
-
-
-def _load_data_set(path):
-    dataset = EvaluationDataset()
-    last_dataset_json = find_last_dataset(path)
-    full_dataset_json_path = os.path.join(path, last_dataset_json)
-
-    dataset.add_test_cases_from_json_file(
-        file_path=full_dataset_json_path,
-        input_key_name='input',
-        actual_output_key_name='actual_output',
-        expected_output_key_name='expected_output',
-        context_key_name='context',
-        retrieval_context_key_name='retrieval_context'
-    )
-    return dataset
-
-
-def load_test_set(collection_name: str):
-    collection_test_set_json_path = str(test_set_json_path).format(collection=collection_name)
-    print('Looking for dataset files in {}'.format(collection_test_set_json_path))
+def load_test_set(collection_name: str) -> EvaluationDataset:
+    """Try to load a test set, else synthesize it from the collection"""
     try:
-        candidates = os.listdir(collection_test_set_json_path)
-    except FileNotFoundError:
-        print('Path does not exist, creating...')
-        os.makedirs(collection_test_set_json_path)
-    else:
-        print('Found {} candidates'.format(len(candidates)))
-        print(candidates)
-
-    if os.path.isdir(collection_test_set_json_path):
-        print('Loading test set from json file: {}'.format(collection_test_set_json_path))
-        try:
-            return _load_data_set(collection_test_set_json_path)
-        except IndexError:
-            print('No recognized datasets for {}'.format(collection_name))
-            return synthesize(collection_name)
-    else:
-        print('Synthesizing new test set from collection {}'.format(collection_name))
-        return synthesize(collection_name)
+        time.sleep(200)
+        dataset = EvaluationDataset()
+        dataset.pull(alias=collection_name)
+        return dataset
+    except Exception:
+        logger.exception(f'Failed to load dataset="{collection_name}":')
+        dataset = synthesize(collection_name)
+        dataset.push(collection_name, overwrite=True)
+        return dataset
 
 
 def get_db(collection):
+    """Helper func to load a collection from Chroma. Currently, embedding is hardcoded,
+    will look into it later."""
     emb_fn = OpenAIEmbeddingFunction(
         api_key=os.environ['OPENAI_API_KEY'],
         model_name='text-embedding-3-small'
@@ -82,22 +50,30 @@ def get_db(collection):
     )
 
 
-def synthesize(collection_name: str):
-    contexts = {}
-    collection = get_db(collection_name)
-    data = collection.get(include=['documents', 'metadatas'])
-    for doc, meta in zip(data['documents'], data['metadatas']):
+def synthesize(collection_name: str) -> EvaluationDataset:
+    """Fetch a collection from the vector database and synthesizes it into a dataset.
+
+    Args:
+        collection_name (str): The name of the collection to synthesize.
+
+    Returns:
+        EvaluationDataset: The new dataset.
+    """
+
+    # Attempt to group contexts by source, so they are "related"
+    vectors, contexts = get_db(collection_name).get(include=['documents', 'metadatas']), {}
+    for doc, meta in zip(vectors['documents'], vectors['metadatas']):
         try:
             contexts[meta['source']].append(doc)
         except KeyError:
             contexts[meta['source']] = [doc]
 
     dataset = EvaluationDataset()
+
+    # noinspection PyTypeChecker
     dataset.generate_goldens(
-        contexts=list(contexts.values())[:3]
+        contexts=list(contexts.values()),
+        synthesizer=Synthesizer(multithreading=False)
     )
-    dataset.save_as(
-        file_type='json',
-        directory=str(test_set_json_path).format(collection=collection_name)
-    )
+
     return dataset

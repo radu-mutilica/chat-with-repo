@@ -1,15 +1,16 @@
 import logging
 
 import deepeval
+import httpx
 import pytest
 from deepeval import assert_test
 from deepeval.metrics import HallucinationMetric, AnswerRelevancyMetric
 from deepeval.test_case import LLMTestCase
 
+from libs.models import Message
+from libs.rag import answer_query
 from . import synthesis
-
-test_set_collection = 'myself'
-test_cases = synthesis.load_test_set(collection_name=test_set_collection)
+from .utils import consume_stream
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler = logging.StreamHandler()
@@ -18,17 +19,31 @@ console_handler.setFormatter(formatter)
 logger = logging.getLogger()
 logger.addHandler(console_handler)
 logger.setLevel(logging.DEBUG)
+test_set_collection = 'myself'
 
 
 @pytest.mark.parametrize(
-    "test_case",
-    test_cases
+    'test_case',
+    synthesis.load_test_set(collection_name=test_set_collection)
 )
 @pytest.mark.asyncio
 async def test_chat_with_repo(test_case: LLMTestCase):
+    last_message = Message.parse_obj(
+        {
+            'role': 'user',
+            'content': {
+                'query': test_case.input,
+                'repo': test_set_collection
+            }
+        }
+    )
 
-    # todo: this is the response from the llm
-    test_case.actual_output = 'Hi'
+    actual_output = await consume_stream(answer_query(
+        last_message=last_message,
+        chat_history=[],
+        client=httpx.AsyncClient()
+    ))
+    test_case.actual_output = actual_output
 
     hallucination_metric = HallucinationMetric(threshold=0.3)
     answer_relevancy_metric = AnswerRelevancyMetric(threshold=0.5)
@@ -38,7 +53,3 @@ async def test_chat_with_repo(test_case: LLMTestCase):
 @deepeval.on_test_run_end
 def function_to_be_called_after_test_run():
     print("Test finished!")
-
-
-if __name__ == '__main__':
-    pass

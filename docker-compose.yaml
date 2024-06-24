@@ -29,6 +29,7 @@ services:
     depends_on:
       - chromadb
       - redis
+      - reranker
     networks:
       - net
     profiles: ['apis']
@@ -85,13 +86,9 @@ services:
           target: /app/libs
     environment:
       CROSSENCODER_TOP_K: "6"
-
     networks:
       - net
-    links:
-      - api
-      - evaluation
-    profiles: [ 'apis' ]
+    profiles: [ 'apis' , 'eval']
 
 
   chromadb:
@@ -140,8 +137,9 @@ services:
     volumes:
       - evaluation_data:/app/evaluation/data
 #    command: python -m pytest -s --capture=no .
-    command: deepeval test run deepeval_suite/test_chat_with_repo.py
-#    command: python deepeval_suite/test_chat_with_repo.py
+    command:  >
+      bash -c "deepeval login --api-key $CONFIDENT_API_KEY &&
+      deepeval test run deepeval_suite/test_chat_with_repo.py --exit-on-first-failure"
     develop:
       watch:
         - action: sync+restart
@@ -151,6 +149,11 @@ services:
           path: ./libs
           target: /app/libs
     environment:
+      CONFIDENT_API_KEY: "${CONFIDENT_API_KEY}"
+      RERANKER_HOST: "reranker"
+      RERANKER_PORT: "80"
+      SIM_SEARCH_TOP_K: "35"
+      REDIS_URL: "redis://redis:6379"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
       CHROMA_HOST: "chromadb"
@@ -162,6 +165,8 @@ services:
       - net
     depends_on:
       - chromadb
+      - reranker
+    profiles: ['eval']
 
 volumes:
   index_data:

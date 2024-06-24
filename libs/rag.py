@@ -1,16 +1,22 @@
+import logging
+import os
 import time
+from typing import List, AsyncGenerator
 
 import httpx
+from httpx import AsyncClient
 from langchain_community.document_transformers import LongContextReorder
+from starlette.responses import StreamingResponse
 
-import logging
-from libs import storage
-from libs.models import RAGDocument
-from libs.proxies import reranker, embeddings
-from libs.proxies.chat import format_context
+from libs import storage, crawl_targets
+from libs.models import RAGDocument, Message
+from libs.proxies import reranker, embeddings, perform_task, rephraser, stream_task
+from libs.proxies.chat import format_context, ChatWithRepo
 
 long_context_reorder = LongContextReorder()
 logger = logging.getLogger(__name__)
+sim_search_top_k = int(os.environ['SIM_SEARCH_TOP_K'])
+
 
 async def context_pipeline(
         query: str,
@@ -85,3 +91,57 @@ async def sim_search(query: str, collection: str, sim_top_k: int, client: httpx.
     logger.info(f'Simsearch took {time.time() - start:.2f}s')
 
     return sim_vectors
+
+
+async def answer_query(
+        last_message: Message,
+        chat_history: List[Message],
+        client: AsyncClient) -> AsyncGenerator:
+    """Do some query processing first, check if there is any chat history, create
+    an llm prompt based on the previous facts and send it over to the llm.
+
+    Args:
+        last_message (Message): the last message aka the user query.
+        chat_history (List[Message]): the chat history, might be an empty list.
+        client: (httpx.AsyncClient) the client.
+
+    Returns:
+        AsyncGenerator of chunks of data.
+    """
+    # todo: Assume all messages are about the same repo
+    query, subnet = last_message.content.query, last_message.content.repo
+
+    assert subnet in crawl_targets, 'Not a valid repo'
+
+    # Check for a chat history, and if present, rephrase the query given the history.
+    # This step is important to guarantee good simsearch results further down
+    if chat_history:
+        start = time.time()
+        logger.info('Found a chat history, rephrasing last query...')
+        rag_query = await perform_task(
+            rephraser.RephraseGivenHistory(
+                query=query,
+                chat_history=chat_history),
+            client=client)
+        logger.info(f'Rephrasing task took {time.time() - start:.2f} seconds!')
+    else:
+        rag_query = query
+
+    start = time.time()
+    context = await context_pipeline(
+        collection=crawl_targets[subnet]['target_collection'],
+        query=rag_query,
+        sim_top_k=sim_search_top_k,
+        client=client
+    )
+    logger.info(f"{time.time() - start:.2f}s: Context length={len(context)}:\n{context}")
+
+    chat_with_repo_task = ChatWithRepo(
+        question=rag_query,
+        context=context,
+        github_name=crawl_targets[subnet]['name'],
+        repo_name=subnet
+
+    )
+    # Hardcode this to stream back the response for now
+    return stream_task(chat_with_repo_task)

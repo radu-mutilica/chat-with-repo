@@ -14,7 +14,7 @@ crossencoder_model = CrossEncoder(
 )
 
 
-async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, int|float]]:
+async def crossencoder(query: str, documents: List[str]) -> List[Dict[str, int | float]]:
     """Use a crossencoder model to compute a document rank.
 
     Args:
