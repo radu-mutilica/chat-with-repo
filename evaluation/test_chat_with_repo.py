@@ -4,7 +4,13 @@ import deepeval
 import httpx
 import pytest
 from deepeval import assert_test
-from deepeval.metrics import HallucinationMetric, AnswerRelevancyMetric
+from deepeval.metrics import (
+    HallucinationMetric,
+    AnswerRelevancyMetric,
+    ContextualRelevancyMetric,
+    FaithfulnessMetric
+)
+from deepeval.metrics.ragas import RagasMetric
 from deepeval.test_case import LLMTestCase
 
 import synthesis
@@ -46,9 +52,33 @@ async def test_chat_with_repo(test_case: LLMTestCase):
     test_case.retrieval_context = [c.page_content for c in rag_response.context]
     test_case.actual_output = await consume_stream(rag_response.stream)
 
-    hallucination_metric = HallucinationMetric(threshold=0.3)
-    answer_relevancy_metric = AnswerRelevancyMetric(threshold=0.5)
-    assert_test(test_case, [hallucination_metric, answer_relevancy_metric])
+    hallucination_metric = HallucinationMetric(
+        threshold=0.3,
+        include_reason=True
+    )
+    answer_relevancy_metric = AnswerRelevancyMetric(
+        threshold=0.5,
+        include_reason=True
+    )
+    context_relevancy_metric = ContextualRelevancyMetric(
+        threshold=0.7,
+        include_reason=True
+    )
+
+    faithfulness_metric = FaithfulnessMetric(
+        threshold=0.7,
+        include_reason=True
+    )
+
+    ragas_metric = RagasMetric(threshold=0.5)
+
+    assert_test(test_case, [
+        hallucination_metric,
+        answer_relevancy_metric,
+        context_relevancy_metric,
+        faithfulness_metric,
+        ragas_metric
+    ], run_async=False)
 
 
 @deepeval.on_test_run_end
