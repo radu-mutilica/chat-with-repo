@@ -1,15 +1,15 @@
 import logging
 import os
 import time
-from typing import List, AsyncGenerator
+from typing import List
 
 import httpx
 from httpx import AsyncClient
 from langchain_community.document_transformers import LongContextReorder
-from starlette.responses import StreamingResponse
+from langchain_core.documents import Document
 
 from libs import storage, crawl_targets
-from libs.models import RAGDocument, Message
+from libs.models import RAGDocument, Message, RAGResponse
 from libs.proxies import reranker, embeddings, perform_task, rephraser, stream_task
 from libs.proxies.chat import format_context, ChatWithRepo
 
@@ -22,7 +22,7 @@ async def context_pipeline(
         query: str,
         collection: str,
         sim_top_k: int,
-        client: httpx.AsyncClient) -> str:
+        client: httpx.AsyncClient) -> List[Document]:
     """Main logic for building the RAG context.
 
     The pipeline consists of the following steps:
@@ -38,7 +38,7 @@ async def context_pipeline(
         client: (httpx.AsyncClient) the httpx client.
 
     Returns:
-        A str which is the formatted context.
+        A list of RAGDocument objects.
     """
 
     logger.info(f'Searching collection {collection}')
@@ -64,7 +64,7 @@ async def context_pipeline(
     # Final touches, apply a long context reorder to mitigate the "lost in the middle" effect
     ordered_documents = long_context_reorder.transform_documents(ranked_documents)
 
-    return format_context(ordered_documents)
+    return list(RAGDocument.parse_obj(doc) for doc in ordered_documents)
 
 
 async def sim_search(query: str, collection: str, sim_top_k: int, client: httpx.AsyncClient):
@@ -96,7 +96,7 @@ async def sim_search(query: str, collection: str, sim_top_k: int, client: httpx.
 async def answer_query(
         last_message: Message,
         chat_history: List[Message],
-        client: AsyncClient) -> AsyncGenerator:
+        client: AsyncClient) -> RAGResponse:
     """Do some query processing first, check if there is any chat history, create
     an llm prompt based on the previous facts and send it over to the llm.
 
@@ -105,8 +105,11 @@ async def answer_query(
         chat_history (List[Message]): the chat history, might be an empty list.
         client: (httpx.AsyncClient) the client.
 
+    Raises:
+        AssertionError: if we have no info or crawl data about the repo at hand.
+
     Returns:
-        AsyncGenerator of chunks of data.
+        A RAGResponse object that includes the stream and the provided rag context.
     """
     # todo: Assume all messages are about the same repo
     query, subnet = last_message.content.query, last_message.content.repo
@@ -134,14 +137,16 @@ async def answer_query(
         sim_top_k=sim_search_top_k,
         client=client
     )
-    logger.info(f"{time.time() - start:.2f}s: Context length={len(context)}:\n{context}")
+    formatted_context = format_context(context)
+    logger.info(f"{time.time() - start:.2f}s: Context size={len(formatted_context)}:"
+                f"\n{formatted_context}")
 
     chat_with_repo_task = ChatWithRepo(
         question=rag_query,
-        context=context,
+        context=formatted_context,
         github_name=crawl_targets[subnet]['name'],
         repo_name=subnet
 
     )
     # Hardcode this to stream back the response for now
-    return stream_task(chat_with_repo_task)
+    return RAGResponse(stream=stream_task(chat_with_repo_task), context=context)

@@ -7,10 +7,10 @@ from deepeval import assert_test
 from deepeval.metrics import HallucinationMetric, AnswerRelevancyMetric
 from deepeval.test_case import LLMTestCase
 
+import synthesis
 from libs.models import Message
 from libs.rag import answer_query
-from . import synthesis
-from .utils import consume_stream
+from utils import consume_stream
 
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler = logging.StreamHandler()
@@ -38,12 +38,13 @@ async def test_chat_with_repo(test_case: LLMTestCase):
         }
     )
 
-    actual_output = await consume_stream(answer_query(
+    rag_response = await answer_query(
         last_message=last_message,
         chat_history=[],
         client=httpx.AsyncClient()
-    ))
-    test_case.actual_output = actual_output
+    )
+    test_case.retrieval_context = [c.page_content for c in rag_response.context]
+    test_case.actual_output = await consume_stream(rag_response.stream)
 
     hallucination_metric = HallucinationMetric(threshold=0.3)
     answer_relevancy_metric = AnswerRelevancyMetric(threshold=0.5)

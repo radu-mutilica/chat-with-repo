@@ -12,7 +12,7 @@ from starlette.responses import StreamingResponse
 
 from libs.models import RequestData
 from libs.rag import answer_query
-from libs.utils import register_profiling_middleware
+from libs.utils import register_profiling_middleware, async_chain
 
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'])
@@ -55,13 +55,20 @@ async def chat_with_repo(request: RequestData, client: AsyncClient = Depends(get
         client: (httpx.AsyncClient) the client.
     """
     try:
-        stream = await answer_query(request.last_message(), request.history(), client)
-        return StreamingResponse(stream)
+        rag_response = await answer_query(request.last_message(), request.history(), client)
+
+        # Wait for the first response chunk. This helps with profiling when looking at charts.
+        first_chunk = await rag_response.stream.__anext__()
+        return StreamingResponse(
+            async_chain(first_chunk, rag_response.stream),
+            media_type="text/html"
+        )
 
     except AssertionError:
         raise HTTPException(status_code=400, detail='Not a valid repository')
 
     except Exception:
+        logger.exception(f'Failed to process request: {request}')
         raise HTTPException(status_code=500, detail='An error occurred while processing the query')
 
 

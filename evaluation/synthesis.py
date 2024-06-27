@@ -1,15 +1,16 @@
 import logging
 import os
 import pathlib
-import time
 
 import chromadb
 from chromadb import Settings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from deepeval.dataset import EvaluationDataset
 from deepeval.synthesizer import Synthesizer
-from .utils import RAGChunker
 from deepeval.synthesizer import doc_chunker
+
+from utils import RAGChunker
+
 # Monkey Patching the DocumentChunker with MyDocumentChunker
 doc_chunker.DocumentChunker = RAGChunker
 
@@ -20,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 def load_test_set(collection_name: str) -> EvaluationDataset:
     """Try to load a test set, else synthesize it from the collection"""
+    logger.info(f'Loading test set from {collection_name}')
     try:
-        time.sleep(200)
         dataset = EvaluationDataset()
         dataset.pull(alias=collection_name)
         return dataset
@@ -30,6 +31,8 @@ def load_test_set(collection_name: str) -> EvaluationDataset:
         dataset = synthesize(collection_name)
         dataset.push(collection_name, overwrite=True)
         return dataset
+    finally:
+        logger.info(f'Loaded test set "{collection_name}"')
 
 
 def get_db(collection):
@@ -61,19 +64,29 @@ def synthesize(collection_name: str) -> EvaluationDataset:
     """
 
     # Attempt to group contexts by source, so they are "related"
+    print(f'Loading vector data for {collection_name}')
     vectors, contexts = get_db(collection_name).get(include=['documents', 'metadatas']), {}
+
+    print(f'Found {len(vectors)} documents. Grouping by contexts...')
     for doc, meta in zip(vectors['documents'], vectors['metadatas']):
         try:
             contexts[meta['source']].append(doc)
         except KeyError:
             contexts[meta['source']] = [doc]
 
-    dataset = EvaluationDataset()
+    print(f'Grouped documents into {len(contexts)} contexts.')
 
     # noinspection PyTypeChecker
-    dataset.generate_goldens(
+    logger.info(f'Synthesizing {collection_name}')
+    synthesizer = Synthesizer(
+        multithreading=False
+    )
+    goldens = synthesizer.generate_goldens(
         contexts=list(contexts.values()),
-        synthesizer=Synthesizer(multithreading=False)
+        include_expected_output=True,
+        max_goldens_per_context=1
     )
 
+    dataset = EvaluationDataset(goldens=goldens)
+    logger.info('Finished synthesizing.')
     return dataset

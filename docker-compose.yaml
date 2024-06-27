@@ -134,12 +134,9 @@ services:
       context: .
       dockerfile: evaluation/Dockerfile
     container_name: evaluation
-    volumes:
-      - evaluation_data:/app/evaluation/data
-#    command: python -m pytest -s --capture=no .
     command:  >
-      bash -c "deepeval login --api-key $CONFIDENT_API_KEY &&
-      deepeval test run deepeval_suite/test_chat_with_repo.py --exit-on-first-failure"
+      bash -c "deepeval login --api-key $CONFIDENT_API_KEY && ls -l &&
+      deepeval test run ."
     develop:
       watch:
         - action: sync+restart
@@ -160,7 +157,7 @@ services:
       CHROMA_PORT: "8000"
       IS_PERSISTENT: "TRUE"
       ANONYMIZED_TELEMETRY: "FALSE"
-      LOG_LEVEL: "INFO"
+      LOG_LEVEL: "DEBUG"
     networks:
       - net
     depends_on:
@@ -172,8 +169,6 @@ volumes:
   index_data:
     driver: local
   crawl_stats_data:
-    driver: local
-  evaluation_data:
     driver: local
 
 

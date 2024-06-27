@@ -1,8 +1,8 @@
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, AsyncGenerator, Any
 
 from langchain_core.documents import Document
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -204,4 +204,11 @@ class LLMResponseChunk(BaseModel):
 
     @property
     def raw(self):
-        return self.choices[0].delta.content.strip()
+        return self.choices[0].delta.content
+
+
+class RAGResponse(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    stream: AsyncGenerator
+    context: List[Any]

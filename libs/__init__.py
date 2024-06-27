@@ -11,12 +11,12 @@ crawl_targets = {
     #     'name': 'cortex.t',
     #     'target_collection': 'subnet18'
     # },
-    # 'subnet-19': {
-    #     'url': 'https://github.com/namoray/vision',
-    #     'branch': 'vision-4.0',
-    #     'name': 'vision',
-    #     'target_collection': 'subnet19'
-    # },
+    'subnet-19': {
+        'url': 'https://github.com/namoray/vision',
+        'branch': 'main',
+        'name': 'vision',
+        'target_collection': 'subnet19'
+    },
     'myself': {
         'url': 'https://github.com/radu-mutilica/chat-with-repo',
         'branch': 'master',

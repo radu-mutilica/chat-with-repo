@@ -45,3 +45,8 @@ def register_profiling_middleware(app: FastAPI):
 
         # Proceed without profiling
         return await call_next(request)
+
+async def async_chain(first_chunk, rest_of_generator):
+    yield first_chunk
+    async for item in rest_of_generator:
+        yield item
