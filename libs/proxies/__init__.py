@@ -49,6 +49,7 @@ async def __make_request(url, payload, headers, client):
             headers=headers,
             timeout=timeout
         )
+
     response.raise_for_status()
 
     if not response.json():

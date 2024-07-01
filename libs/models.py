@@ -212,3 +212,8 @@ class RAGResponse(BaseModel):
 
     stream: AsyncGenerator
     context: List[Any]
+
+
+class Rank(BaseModel):
+    doc_idx: int
+    score: float

@@ -45,21 +45,17 @@ async def context_pipeline(
 
     sim_vectors = await sim_search(query, collection, sim_top_k, client)
 
-    start = time.time()
-    ranks = reranker.rerank(query, sim_vectors['documents'][0], client)
-    logger.info(f'Got new ranks from reranker, took {time.time() - start:.2f}s')
-
+    scores = reranker.rerank(query, sim_vectors['documents'][0], client)
     # Build a list with only the ranked documents, these are the final ones that
     # are used for formatting the RAG context
     documents = []
     for content, metadata in zip(sim_vectors['documents'][0], sim_vectors['metadatas'][0]):
         documents.append(RAGDocument(page_content=content, metadata=metadata))
 
-    ranked_documents = []
-    for rank in await ranks:
-        ranked_documents.append(
-            documents[int(rank['corpus_id'])],
-        )
+    for index, score in enumerate(await scores):
+        documents[index].metadata['score'] = score
+
+    ranked_documents = sorted(documents, key=lambda d: d.metadata['score'], reverse=True)
 
     # Final touches, apply a long context reorder to mitigate the "lost in the middle" effect
     ordered_documents = long_context_reorder.transform_documents(ranked_documents)

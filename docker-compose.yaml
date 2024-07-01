@@ -22,14 +22,13 @@ services:
       CHROMA_PORT: "8000"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
-      RERANKER_HOST: "reranker"
-      RERANKER_PORT: "80"
+      RERANKER_API: "${RERANKER_API}"
+      HF_API_KEY: "${HF_API_KEY}"
       LOG_LEVEL: "INFO"
       PROFILING_ENABLED: "FALSE"
     depends_on:
       - chromadb
       - redis
-      - reranker
     networks:
       - net
     profiles: ['apis']
@@ -66,29 +65,6 @@ services:
     volumes:
       - crawl_stats_data:/crawl_stats
     profiles: [ 'crawler' ]
-
-
-  reranker:
-    build:
-      context: .
-      dockerfile: reranker/Dockerfile
-    command: uvicorn api:app --reload --host 0.0.0.0 --port 80
-    container_name: reranker
-    ports:
-      - "8081:80"
-    develop:
-      watch:
-        - action: sync
-          path: ./reranker
-          target: /app
-        - action: sync
-          path: ./libs
-          target: /app/libs
-    environment:
-      CROSSENCODER_TOP_K: "6"
-    networks:
-      - net
-    profiles: [ 'apis' , 'eval']
 
 
   chromadb:
@@ -147,8 +123,8 @@ services:
           target: /app/libs
     environment:
       CONFIDENT_API_KEY: "${CONFIDENT_API_KEY}"
-      RERANKER_HOST: "reranker"
-      RERANKER_PORT: "80"
+      RERANKER_API: "${RERANKER_API}"
+      HF_API_KEY: "${HF_API_KEY}"
       SIM_SEARCH_TOP_K: "35"
       REDIS_URL: "redis://redis:6379"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
@@ -162,7 +138,6 @@ services:
       - net
     depends_on:
       - chromadb
-      - reranker
     profiles: ['eval']
 
 volumes:
