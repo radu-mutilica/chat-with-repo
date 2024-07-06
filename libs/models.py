@@ -27,13 +27,6 @@ class Object(BaseModel):
     embedding: List[float]
 
 
-class EmbeddingResponse(BaseModel):
-    object: str
-    data: List[Object]
-    model: str
-    usage: Optional[EmbeddingUsage]
-
-
 class QueryPrompts(BaseModel):
     user: str
     system: str

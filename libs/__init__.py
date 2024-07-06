@@ -5,12 +5,12 @@
 #   'target_collection': name of vector db collection, e.g. 'subnet18'
 
 crawl_targets = {
-    # 'subnet-18': {
-    #     'url': 'https://github.com/corcel-api/cortex.t',
-    #     'branch': 'main',
-    #     'name': 'cortex.t',
-    #     'target_collection': 'subnet18'
-    # },
+    'subnet-18': {
+        'url': 'https://github.com/corcel-api/cortex.t',
+        'branch': 'main',
+        'name': 'cortex.t',
+        'target_collection': 'subnet18'
+    },
     'subnet-19': {
         'url': 'https://github.com/namoray/vision',
         'branch': 'main',
@@ -23,7 +23,6 @@ crawl_targets = {
         'name': 'chat-with-repo',
         'target_collection': 'myself'
     }
-
     # 'subnet-1': 'https://github.com/macrocosm-os/prompting',
     # 'subnet-4': 'https://github.com/manifold-inc/targon',
     # 'subnet-5': 'https://github.com/OpenKaito/openkaito',

@@ -22,10 +22,11 @@ services:
       CHROMA_PORT: "8000"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
-      RERANKER_API: "${RERANKER_API}"
+      HF_RERANKER_API: "${HF_RERANKER_API}"
+      HF_EMBEDDINGS_API: "${HF_EMBEDDINGS_API}"
       HF_API_KEY: "${HF_API_KEY}"
       LOG_LEVEL: "INFO"
-      PROFILING_ENABLED: "FALSE"
+      PROFILING_ENABLED: "TRUE"
     depends_on:
       - chromadb
       - redis
@@ -51,6 +52,9 @@ services:
       GITHUB_API_KEY: "${GITHUB_API_KEY}"
       CORCEL_API_KEY: "${CORCEL_API_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      HF_API_KEY: "${HF_API_KEY}"
+      HF_RERANKER_API: "${HF_RERANKER_API}"
+      HF_EMBEDDINGS_API: "${HF_EMBEDDINGS_API}"
       CHROMA_HOST: "chromadb"
       MONGO_HOST: "mongodb"
       MONGO_PORT: "27017"
@@ -123,7 +127,7 @@ services:
           target: /app/libs
     environment:
       CONFIDENT_API_KEY: "${CONFIDENT_API_KEY}"
-      RERANKER_API: "${RERANKER_API}"
+      HF_RERANKER_API: "${HF_RERANKER_API}"
       HF_API_KEY: "${HF_API_KEY}"
       SIM_SEARCH_TOP_K: "35"
       REDIS_URL: "redis://redis:6379"

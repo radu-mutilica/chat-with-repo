@@ -8,6 +8,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter, TextSplitter, Language
 
 from libs import extensions
+from libs.http import OptimizedAsyncClient
 from libs.models import Repo
 from libs.proxies import summaries, perform_task
 
@@ -51,7 +52,7 @@ def prepare_splitter(language: Language) -> TextSplitter:
 async def split_document(
         document: Document,
         repo: Repo,
-        client: httpx.AsyncClient) -> List[Document]:
+        client: OptimizedAsyncClient) -> List[Document]:
     """Most of the heavy lifting associated with splitting and summarizing files and code snippets.
     
     This async func does the following processing steps:
@@ -143,7 +144,7 @@ async def split_document(
 
 async def split_documents(
         repo: Repo,
-        client: httpx.AsyncClient
+        client: OptimizedAsyncClient
 ) -> List[Document]:
     """Wrapper function for building a list of coroutines and executing them"""
     chunks = []

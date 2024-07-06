@@ -3,11 +3,11 @@ import logging
 import os
 import tempfile
 
-import httpx
-
 import db
 from libs import splitting, crawl_targets
+from libs.http import OptimizedAsyncClient
 from libs.proxies import perform_task, summaries
+from libs.proxies.embeddings import HFEmbeddingFunc
 from repository import load_repo, check_if_crawl_needed
 
 log_level = os.environ['LOG_LEVEL']
@@ -20,7 +20,13 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
-async def crawl_repo(url: str, branch: str, target_collection: str, client: httpx.AsyncClient):
+async def crawl_repo(
+        url: str,
+        branch: str,
+        target_collection: str,
+        client: OptimizedAsyncClient,
+        emb_func: HFEmbeddingFunc,
+):
     """Main crawler function.
 
     This holds most of the crawling logic, while using LLM calls to also summarize various
@@ -30,7 +36,8 @@ async def crawl_repo(url: str, branch: str, target_collection: str, client: http
         url (str): The repository URL.
         branch (str): The repository branch.
         target_collection (str): The target collection for the database.
-        client (httpx.AsyncClient): The httpx client to use.
+        client (OptimizedAsyncClient): The httpx client to use.
+        emb_func (HFEmbeddingFunc): The embedding function to use for crawling.
 
     Once crawled and processed, insert everything into a chroma collection.
     """
@@ -54,7 +61,7 @@ async def crawl_repo(url: str, branch: str, target_collection: str, client: http
             client=client
         )
 
-        with db.VectorDBCollection(collection_name=target_collection) as vecdb_client:
+        with db.VectorDBCollection(target_collection, emb_func) as vecdb_client:
             vecdb_client.add(
                 documents=[chunk.page_content for chunk in chunks],
                 metadatas=[chunk.metadata for chunk in chunks],
@@ -65,14 +72,16 @@ async def crawl_repo(url: str, branch: str, target_collection: str, client: http
 
 async def crawl(targets):
     """Helper function to create all crawling tasks (one per repo defined in the yaml file)"""
-    client = httpx.AsyncClient()
+    client = OptimizedAsyncClient()
+    emb_func = HFEmbeddingFunc(client)
 
     tasks = [
         asyncio.create_task(crawl_repo(
             url=crawl_config['url'],
             branch=crawl_config['branch'],
             target_collection=crawl_config['target_collection'],
-            client=client
+            client=client,
+            emb_func=emb_func
         ))
         async for subnet, crawl_config in check_if_crawl_needed(targets, client)
     ]

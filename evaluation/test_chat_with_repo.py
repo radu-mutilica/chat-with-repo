@@ -14,6 +14,7 @@ from deepeval.metrics.ragas import RagasMetric
 from deepeval.test_case import LLMTestCase
 
 import synthesis
+from libs.http import OptimizedAsyncClient
 from libs.models import Message
 from libs.rag import answer_query
 from utils import consume_stream
@@ -47,7 +48,7 @@ async def test_chat_with_repo(test_case: LLMTestCase):
     rag_response = await answer_query(
         last_message=last_message,
         chat_history=[],
-        client=httpx.AsyncClient()
+        client=OptimizedAsyncClient()
     )
     test_case.retrieval_context = [c.page_content for c in rag_response.context]
     test_case.actual_output = await consume_stream(rag_response.stream)
