@@ -17,13 +17,12 @@ crawl_targets = {
         'name': 'vision',
         'target_collection': 'subnet19'
     },
-    # 'myself': {
-    #     'url': 'https://github.com/radu-mutilica/chat-with-repo',
-    #     'branch': 'master',
-    #     'name': 'chat-with-repo',
-    #     'target_collection': 'myself'
-    # }
-
+    'myself': {
+        'url': 'https://github.com/radu-mutilica/chat-with-repo',
+        'branch': 'master',
+        'name': 'chat-with-repo',
+        'target_collection': 'myself'
+    }
     # 'subnet-1': 'https://github.com/macrocosm-os/prompting',
     # 'subnet-4': 'https://github.com/manifold-inc/targon',
     # 'subnet-5': 'https://github.com/OpenKaito/openkaito',

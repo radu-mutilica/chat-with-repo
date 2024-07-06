@@ -6,6 +6,7 @@ from aiolimiter import AsyncLimiter
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type, \
     retry_if_result, RetryError
 
+from libs.http import OptimizedAsyncClient
 from libs.models import ProxyLLMTask
 
 logger = logging.getLogger(__name__)
@@ -43,12 +44,13 @@ async def __make_request(url, payload, headers, client):
     """Helper func to do a generic request, wrapped with retry handler"""
     async with rate_limiter:
         # todo: test if need new client here or not
-        response = await httpx.AsyncClient().post(
+        response = await client.post(
             url=url,
             json=payload,
             headers=headers,
             timeout=timeout
         )
+
     response.raise_for_status()
 
     if not response.json():
@@ -57,7 +59,7 @@ async def __make_request(url, payload, headers, client):
     return response
 
 
-async def perform_task(task: ProxyLLMTask, client: httpx.AsyncClient) -> str:
+async def perform_task(task: ProxyLLMTask, client: OptimizedAsyncClient) -> str:
     """Prepare a payload for an llm task, fire it and return back the response.
 
     Args:

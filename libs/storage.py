@@ -16,7 +16,7 @@ vectordb = chromadb.HttpClient(
 )
 
 
-def get_db(collection):
+async def get_db(collection):
     return vectordb.get_collection(
         name=collection,
         embedding_function=emb_fn

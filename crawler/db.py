@@ -3,21 +3,17 @@ import os
 
 import chromadb
 from chromadb.config import Settings
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from pymongo import MongoClient
 
 logger = logging.getLogger(__name__)
-emb_fn = OpenAIEmbeddingFunction(
-    api_key=os.environ['OPENAI_API_KEY'],
-    model_name='text-embedding-3-small'
-)
 
 
 class VectorDBCollection:
     """Context manager to handle collection creation/deletion for ChromaDB"""
 
-    def __init__(self, collection_name):
+    def __init__(self, collection_name, emb_func):
         logger.info(f'Establishing connection to ChromaDB')
+        self.emb_func = emb_func
         self._main_collection = collection_name
         self._temp_collection = f'{self._main_collection}.temp'
         self._db_client = chromadb.HttpClient(
@@ -41,7 +37,7 @@ class VectorDBCollection:
         logger.info(f'Creating new {self._temp_collection} collection')
         return self._db_client.create_collection(
             name=self._temp_collection,
-            embedding_function=emb_fn)
+            embedding_function=self.emb_func)
 
     def __exit__(self, exc_type, exc_value, traceback):
         """Upon exiting, delete the MAIN collection and replace it with the TEMP one."""
@@ -59,7 +55,7 @@ class VectorDBCollection:
 
         new_collection = self._db_client.get_collection(
             name=self._temp_collection,
-            embedding_function=emb_fn
+            embedding_function=self.emb_func
         )
         new_collection.modify(name=self._main_collection)
 

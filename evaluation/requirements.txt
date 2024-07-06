@@ -1,0 +1,8 @@
+deepeval~=0.21.57
+langchain-openai~=0.1.8
+pytest
+pytest-asyncio
+aiolimiter
+chromadb~=0.5.3
+starlette
+

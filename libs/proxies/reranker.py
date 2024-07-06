@@ -1,34 +1,23 @@
-import os
 from typing import List
 
-from httpx import AsyncClient
+from libs.http import OptimizedAsyncClient
+from libs.models import Model
+from libs.proxies.providers import hf_reranker
 
-RERANKER_HEADERS = {
-    "Content-Type": "application/json",
-}
+model = Model(name='reranker', provider=hf_reranker, endpoint='')
 
 
-async def rerank(query: str, documents: List[str], client: AsyncClient):
-    """Helper function to build a payload and rerank some documents"""
+async def rerank(query: str, documents: List[str], client: OptimizedAsyncClient):
+    """Helper function to create all crawling tasks (one per repo defined in the yaml file)"""
     payload = {
-        "model": "crossencoder",
-        "messages": [
-            {
-                "role": "system",
-                "content": {
-                    "query": query,
-                    "documents": documents
-                }
-            }
-
-        ]
+        'query': query,
+        'documents': documents
     }
 
     response = await client.post(
-        f'http://{os.environ["RERANKER_HOST"]}:{os.environ["RERANKER_PORT"]}/rerank',
-        json=payload,
-        headers=RERANKER_HEADERS
-    )
+        url=model.url,
+        json={'inputs': payload},
+        headers=model.provider.headers)
 
     response.raise_for_status()
 

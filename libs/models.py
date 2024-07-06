@@ -1,8 +1,8 @@
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, AsyncGenerator, Any
 
 from langchain_core.documents import Document
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +25,6 @@ class Object(BaseModel):
     object: str
     index: int
     embedding: List[float]
-
-
-class EmbeddingResponse(BaseModel):
-    object: str
-    data: List[Object]
-    model: str
-    usage: Optional[EmbeddingUsage]
 
 
 class QueryPrompts(BaseModel):
@@ -189,3 +182,31 @@ class RAGDocument(Document):
                     raw_code=self.metadata['original_page_content']
                 )
             )
+
+
+class ChunkContent(BaseModel):
+    content: str
+
+
+class ChunkMessage(BaseModel):
+    delta: ChunkContent
+
+
+class LLMResponseChunk(BaseModel):
+    choices: List[ChunkMessage]
+
+    @property
+    def raw(self):
+        return self.choices[0].delta.content
+
+
+class RAGResponse(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    stream: AsyncGenerator
+    context: List[Any]
+
+
+class Rank(BaseModel):
+    doc_idx: int
+    score: float
