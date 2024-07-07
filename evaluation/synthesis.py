@@ -12,6 +12,9 @@ from libs.http import OptimizedAsyncClient
 from utils import RAGChunker
 from libs.proxies.embeddings import HFEmbeddingFunc
 
+# todo: there is some research to be done here, if we want to use our own chunks or
+# let deepeval perform all the splitting work from the raw documents, and generate its own dataset
+
 # Monkey Patching the DocumentChunker with MyDocumentChunker
 doc_chunker.DocumentChunker = RAGChunker
 
@@ -29,8 +32,11 @@ def load_test_set(collection_name: str) -> EvaluationDataset:
         return dataset
     except Exception:
         logger.exception(f'Failed to load dataset="{collection_name}":')
+
+        # Let's generate a fresh one, this will take a while...
         dataset = synthesize(collection_name)
         dataset.push(collection_name, overwrite=True)
+
         return dataset
     finally:
         logger.info(f'Loaded test set "{collection_name}"')
@@ -66,6 +72,7 @@ def synthesize(collection_name: str) -> EvaluationDataset:
     print(f'Loading vector data for {collection_name}')
     vectors, contexts = get_db(collection_name).get(include=['documents', 'metadatas']), {}
 
+    # todo: this is a bit wonky, since we're grouping the docs by "source" after the fact?
     print(f'Found {len(vectors)} documents. Grouping by contexts...')
     for doc, meta in zip(vectors['documents'], vectors['metadatas']):
         try:
@@ -83,9 +90,11 @@ def synthesize(collection_name: str) -> EvaluationDataset:
     goldens = synthesizer.generate_goldens(
         contexts=list(contexts.values()),
         include_expected_output=True,
+        # Can play around with this, depending on the cap on your deepeval account
         max_goldens_per_context=1
     )
 
     dataset = EvaluationDataset(goldens=goldens)
-    logger.info('Finished synthesizing.')
+    logger.info(f'Finished synthesizing {collection_name}')
+
     return dataset
