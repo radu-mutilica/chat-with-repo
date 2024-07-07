@@ -4,12 +4,13 @@ import pathlib
 
 import chromadb
 from chromadb import Settings
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from deepeval.dataset import EvaluationDataset
 from deepeval.synthesizer import Synthesizer
 from deepeval.synthesizer import doc_chunker
 
+from libs.http import OptimizedAsyncClient
 from utils import RAGChunker
+from libs.proxies.embeddings import HFEmbeddingFunc
 
 # Monkey Patching the DocumentChunker with MyDocumentChunker
 doc_chunker.DocumentChunker = RAGChunker
@@ -38,10 +39,8 @@ def load_test_set(collection_name: str) -> EvaluationDataset:
 def get_db(collection):
     """Helper func to load a collection from Chroma. Currently, embedding is hardcoded,
     will look into it later."""
-    emb_fn = OpenAIEmbeddingFunction(
-        api_key=os.environ['OPENAI_API_KEY'],
-        model_name='text-embedding-3-small'
-    )
+    emb_fn = HFEmbeddingFunc(OptimizedAsyncClient())
+
     vectordb = chromadb.HttpClient(
         host=os.environ['CHROMA_HOST'],
         port=int(os.environ['CHROMA_PORT']),

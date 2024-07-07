@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Dict, AsyncGenerator, Any
+from typing import List, Dict, AsyncGenerator, Any
 
 from langchain_core.documents import Document
 from pydantic import BaseModel, ConfigDict
@@ -200,11 +200,12 @@ class LLMResponseChunk(BaseModel):
         return self.choices[0].delta.content
 
 
-class RAGResponse(BaseModel):
+class RAGPayload(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     stream: AsyncGenerator
     context: List[Any]
+    formatted: str
 
 
 class Rank(BaseModel):

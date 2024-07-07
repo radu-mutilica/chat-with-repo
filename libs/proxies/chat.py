@@ -8,9 +8,8 @@ from libs.proxies.providers import corcel
 
 logger = logging.getLogger(__name__)
 
-chat = Model(name='gpt-4o', provider=corcel, endpoint='text/cortext/chat')
-
 prompt_separator = '\n\n' + '-' * 9 + '\n'
+reader = Model(name='gpt-4o', provider=corcel, endpoint='text/cortext/chat')
 
 
 class ChatWithRepo(ProxyLLMTask):
@@ -20,10 +19,10 @@ class ChatWithRepo(ProxyLLMTask):
         "top_p": 1,
     }
 
-    model = chat
+    model = reader
     system_prompt = \
         """You are the authoritative source for a codebase repository called "{repo_name}" (known also as "{github_name}"). 
-        When users engage with you, respond as if you are the dev team behind the repository (and you've just received a new release).
+        When users engage with you, respond as if you are the dev team behind the repository.
         
         1. Provide comprehensive explanations by walking through relevant code paths and supporting with clean code examples.
         2. When users describe problems, break down solutions into clear numbered/bullet-pointed steps. Supplement each step with insightful commentary based on your inherent repository knowledge.

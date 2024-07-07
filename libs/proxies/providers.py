@@ -20,15 +20,6 @@ hf_embeddings = Provider(
     url=os.environ['HF_EMBEDDINGS_API']
 )
 
-openai = Provider(
-    name='OpenAI',
-    headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"
-    },
-    url='https://api.openai.com/v1'
-)
-
 corcel = Provider(
     name='corcel-vision',
     headers={

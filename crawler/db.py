@@ -63,19 +63,41 @@ class VectorDBCollection:
                     f'with a total vector count of {new_collection.count()}')
 
 
-class StatsDB:
+class CrawlStats:
+    """
+    A class for ORM bindings for crawl statistics and operations.
+    """
 
     def __init__(self, connection_string):
         self.client = MongoClient(connection_string)
         self.db = self.client.get_default_database()
         self.collection = self.db['stats']
 
-    def log_finished_crawl(self, stats, collection_name):
+    def update_finished_crawl(self, stats, collection_name):
+        """Save the finished crawl stats to the database.
+
+        Args:
+            stats (dict): A dictionary containing the statistics of the finished crawl.
+            collection_name (str): The name of the collection in the database where the statistics
+            should be logged.
+
+        Returns:
+            ObjectId: The generated unique identifier of the inserted document.
+        """
         collection = self.db[collection_name]
         result = collection.insert_one(stats)
         return result.inserted_id
 
     def get_last_commit(self, repo):
+        """Get the timestamp of the last commit to a repository.
+
+        Args:
+            repo (str): The name of the repository.
+
+        Returns:
+            int: The timestamp of the last commit made to the repository.
+            If no commit exists, it returns 0.
+        """
         repo_crawl_stats = self.collection.find_one(
             {'_id': repo},
         )
@@ -86,6 +108,12 @@ class StatsDB:
             return 0
 
     def set_last_commit(self, repo, ts):
+        """Set the last commit timestamp for a repository.
+
+        Args:
+            repo (str): The name or identifier of the repository.
+            ts (datetime): The timestamp of the last commit.
+        """
         self.collection.update_one(
             {'_id': repo},
             {'$set': {

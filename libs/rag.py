@@ -8,7 +8,7 @@ from langchain_core.documents import Document
 
 from libs import storage, crawl_targets
 from libs.http import OptimizedAsyncClient
-from libs.models import RAGDocument, Message, RAGResponse
+from libs.models import RAGDocument, Message, RAGPayload
 from libs.proxies import reranker, embeddings, perform_task, rephraser, stream_task
 from libs.proxies.chat import format_context, ChatWithRepo
 
@@ -103,9 +103,9 @@ async def sim_search(
 async def answer_query(
         last_message: Message,
         chat_history: List[Message],
-        client: OptimizedAsyncClient) -> RAGResponse:
+        client: OptimizedAsyncClient) -> RAGPayload:
     """Do some query processing first, check if there is any chat history, create
-    an llm prompt based on the previous facts and send it over to the llm.
+    an llm prompt based on the previous facts and send it over to the LLM.
 
     Args:
         last_message (Message): the last message aka the user query.
@@ -113,10 +113,10 @@ async def answer_query(
         client: (OptimizedAsyncClient) the client.
 
     Raises:
-        AssertionError: if we have no info or crawl data about the repo at hand.
+        AssertionError: If we have no info or crawl data about the repo at hand.
 
     Returns:
-        A RAGResponse object that includes the stream and the provided rag context.
+        A RAGPayload object that includes the stream and the provided rag context.
     """
     # todo: Assume all messages are about the same repo
     query, subnet = last_message.content.query, last_message.content.repo
@@ -132,6 +132,8 @@ async def answer_query(
                     chat_history=chat_history),
                 client=client))
 
+        # We're going to be using two separate endpoints, so it helps to make sure
+        # they are already 'warmed up' to avoid doing SSL handshake at the last possible moment
         reranker_warm_up_task = tg.create_task(client.warmup_if_needed(
             reranker.model.url,
             reranker.model.provider.headers
@@ -143,7 +145,10 @@ async def answer_query(
         ))
 
         vector_db_task = tg.create_task(
-            storage.get_db(crawl_targets[subnet]['target_collection'])
+            storage.get_db(
+                collection=crawl_targets[subnet]['target_collection'],
+                client=client
+            )
         )
 
     context = await context_pipeline(
@@ -151,6 +156,7 @@ async def answer_query(
         sim_top_k=sim_search_top_k,
         client=client,
         vector_db_future=vector_db_task,
+        # todo: below two params should probably be wrapped nicer
         reranker_warm_up_future=reranker_warm_up_task,
         embeddings_warm_up_task=embeddings_warm_up_task
     )
@@ -165,4 +171,9 @@ async def answer_query(
     )
 
     # Hardcode this to stream back the response for now
-    return RAGResponse(stream=stream_task(chat_with_repo_task), context=context)
+    return RAGPayload(
+        stream=stream_task(chat_with_repo_task),
+        context=context,
+        # todo: Move 'formatted' under 'context'
+        formatted=formatted_context
+    )

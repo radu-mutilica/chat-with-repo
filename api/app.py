@@ -52,18 +52,27 @@ async def chat_with_repo(request: RequestData, client: OptimizedAsyncClient = De
 
     Args:
         request: (RequestData) the request.
-        client: (httpx.AsyncClient) the client.
+        client: (OptimizedAsyncClient) the client to use throughout the pipeline.
     """
     try:
-        start = time.time()
-        logger.info('Started RAG pipeline')
-        rag_response = await answer_query(request.last_message(), request.history(), client)
-        logger.info(f'Finished RAG pipeline in {time.time() - start:.2f}s')
+        start = time.perf_counter()
 
-        # Wait for the first response chunk. This helps with profiling exposing real runtime.
-        first_chunk = await rag_response.stream.__anext__()
+        rag_payload = await answer_query(request.last_message(), request.history(), client)
+        rag_time_elapsed = time.perf_counter() - start
+        logger.info(f'Got context in {rag_time_elapsed:.2f}s, {len(rag_payload.formatted)} tokens')
+
+        # print('*'*100)
+        # print(rag_payload.formatted)
+        # print('*' * 100)
+
+        # Wait for the first response chunk. This helps with profiling, exposing real runtime.
+        first_chunk_start = time.perf_counter()
+        first_chunk = await rag_payload.stream.__anext__()
+        logger.info(f'Got first response chunk in {time.perf_counter() - first_chunk_start:.2f}s')
+
+        logger.info(f'Total query time: {time.perf_counter() - start:.2f}s')
         return StreamingResponse(
-            async_chain(first_chunk, rag_response.stream),
+            async_chain(first_chunk, rag_payload.stream),
             media_type="text/html"
         )
 
