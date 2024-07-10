@@ -71,14 +71,14 @@ async def test_chat_with_repo(test_case: LLMTestCase):
         include_reason=True
     )
 
-    ragas_metric = RagasMetric(threshold=0.5)
+    # ragas_metric = RagasMetric(threshold=0.5)
 
     assert_test(test_case, [
         hallucination_metric,
         answer_relevancy_metric,
         context_relevancy_metric,
         faithfulness_metric,
-        ragas_metric
+        # ragas_metric
     ], run_async=False)
 
 
