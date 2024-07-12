@@ -11,3 +11,4 @@ aiolimiter~=1.1.0
 fastapi-limiter~=0.1.6
 pyinstrument~=4.6.2
 pydantic~=2.7.4
+pymongo~=4.8.0

@@ -8,13 +8,12 @@ import httpx
 from directory_tree import display_tree
 from langchain_community.document_loaders import GitLoader
 
-import db
-from libs.models import Repo
+import libs.stats
+from libs.models import Repo, RepoMetadata
 from libs.storage import vector_db
 
 logger = logging.getLogger(__name__)
 
-mongo_url = f'mongodb://{os.environ["MONGO_HOST"]}:{os.environ["MONGO_PORT"]}/stats'
 # todo: clean this junk
 github_api_url = 'https://api.github.com/repos/'
 github_access_token = os.environ['GITHUB_API_KEY']
@@ -23,7 +22,7 @@ timeout = httpx.Timeout(20.0, read=None)
 
 
 async def get_default_branch(repo_url: str, client: httpx.AsyncClient) -> str:
-    """Helper function to figure out the default branch for a repo, using the Github API"""
+    """Helper function to figure out the default branch for a repo, using the GitHub API"""
     parsed_url = urlparse(repo_url)
     path_parts = parsed_url.path.strip('/').split('/')
 
@@ -62,12 +61,73 @@ async def load_repo(url: str, branch, temp_path: str) -> Repo:
     return repo
 
 
-async def get_last_commit_ts(url: str, branch: str, client: httpx.AsyncClient) -> int:
-    """Helper function to get the last commit timestamp for a repo using the GitHub API"""
+async def get_repo_metadata(
+        url: str,
+        branch: str,
+        client: httpx.AsyncClient
+) -> RepoMetadata:
+    """Query GitHub API to get detailed information about a specific repo/branch combo.
+
+    Will do two separate requests, one for the general repo, one for the specific branch.
+
+    Args:
+        url: A string representing the URL of the repository.
+        branch: A string representing the branch of the repository.
+        client: An instance of the `httpx.AsyncClient` class used for making asynchronous
+        HTTP requests.
+
+    Returns:
+        An instance of the `RepoMetadata` model containing the metadata of the repository.
+
+    """
     repo_parts = url.rstrip('/').split('/')
+
     owner = repo_parts[-2]
     repo = repo_parts[-1]
 
+    data = await _get_repo_information(owner, repo, client)
+    last_commit_ts = await get_last_commit_ts(owner, repo, branch, client)
+
+    data['branch'] = {
+        'name': branch,
+        'last_commit_ts': last_commit_ts,
+    }
+    data['github_id'] = data.pop('id')
+    metadata = RepoMetadata.model_validate(data)
+
+    return metadata
+
+
+async def _get_repo_information(owner: str, repo: str, client: httpx.AsyncClient) -> dict:
+    """Helper func to call the GitHub API and get general repo details."""
+    url = github_api_url + f'{owner}/{repo}'
+
+    response = await client.get(url, headers=github_api_headers, timeout=timeout)
+    response.raise_for_status()
+
+    return response.json()
+
+
+async def get_last_commit_ts(
+        owner: str,
+        repo: str,
+        branch: str,
+        client: httpx.AsyncClient) -> float:
+    """Get the last commit timestamp for a specific repo/branch combo.
+
+    Args:
+        owner: The username or organization name of the repository owner.
+        repo: The name of the repository.
+        branch: The name of the branch.
+        client: The httpx.AsyncClient object used for sending HTTP requests.
+
+    Returns:
+        float: The timestamp of the last commit on the specified branch in the repository.
+
+    Raises:
+        httpx.HTTPStatusError: If the HTTP request to the GitHub API fails or returns an
+        error status.
+    """
     url = github_api_url + f'{owner}/{repo}/commits/{branch}'
 
     response = await client.get(url, headers=github_api_headers, timeout=timeout)
@@ -76,7 +136,7 @@ async def get_last_commit_ts(url: str, branch: str, client: httpx.AsyncClient) -
     last_commit = response.json()['commit']['author']['date']
     last_commit = datetime.strptime(last_commit, "%Y-%m-%dT%H:%M:%SZ")
 
-    return int(last_commit.timestamp())
+    return last_commit.timestamp()
 
 
 async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGenerator:
@@ -95,7 +155,7 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
         An asynchronous generator that yields tuples of subnet and crawl configuration if crawl is
         needed.
     """
-    stats = db.CrawlStats(mongo_url)
+    stats = libs.stats.CrawlStats()
 
     all_collections = [c.name for c in vector_db.list_collections()]
     logger.info(f'All collections: {all_collections}')
@@ -104,7 +164,7 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
         target_collection = config['target_collection']
         will_crawl = False  # assume we don't need to crawl
 
-        last_commit_ts = await get_last_commit_ts(config['url'], config['branch'], client)
+        repo_metadata = await get_repo_metadata(config['url'], config['branch'], client)
 
         if target_collection not in all_collections:
             # If no collection present, then just go ahead and crawl
@@ -116,14 +176,17 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
             logger.info(f'Collection present target={target_collection}. Checking last commit...')
 
             last_crawled_commit_ts = stats.get_last_commit(subnet)
-            if last_crawled_commit_ts < last_commit_ts:
+            if last_crawled_commit_ts < repo_metadata.branch.last_commit_ts:
                 logger.info(f'Stale last commit ts={last_crawled_commit_ts} target={subnet}, '
-                            f'new one {last_commit_ts}. Crawling...')
+                            f'new one {repo_metadata}. Crawling...')
                 will_crawl = True
             else:
-                logger.info(f'Skipping target={target_collection}. Last commit @ {last_commit_ts}')
+                logger.info(f'Skipping target={target_collection}. Last commit @ {repo_metadata}')
 
         if will_crawl:
-            yield subnet, config
-            # todo: what happens if we fail to crawl? don't save stats to mongo!
-            stats.set_last_commit(subnet, last_commit_ts)
+            try:
+                yield subnet, config
+            except Exception:
+                logger.exception(f'Failed to crawl target={target_collection}:')
+            else:
+                stats.update_crawl_stats(subnet, repo_metadata)

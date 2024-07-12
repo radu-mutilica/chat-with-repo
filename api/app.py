@@ -2,6 +2,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from typing import List
 
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException, Depends
@@ -10,8 +11,9 @@ from fastapi_limiter.depends import RateLimiter
 from starlette.responses import StreamingResponse
 
 from libs.http import OptimizedAsyncClient
-from libs.models import RequestData
+from libs.models import RequestData, RepoMetadata
 from libs.rag import answer_query
+from libs.stats import CrawlStats
 from libs.utils import register_profiling_middleware, async_chain
 
 logger = logging.getLogger()
@@ -38,14 +40,43 @@ app = FastAPI(lifespan=lifespan)
 register_profiling_middleware(app)
 
 
-async def get_client():
+async def get_http_client():
     """Helper func to keep a client hot"""
     async with OptimizedAsyncClient() as client:
         yield client
+        
+        
+async def get_stats_client():
+    """Helper func to keep a client hot"""
+    yield CrawlStats()
+
+
+@app.get("/repos/", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
+async def repos(
+        crawl_stats: CrawlStats = Depends(get_stats_client)
+) -> List[RepoMetadata]:
+    """Fetch a list of crawled repos from the crawl stats database.
+
+    Args:
+        crawl_stats: The CrawlStats object used to get repository information.
+
+    Returns:
+        List[RepoMetadata]: A list of RepoMetadata objects representing the retrieved repositories.
+    """
+    start = time.perf_counter()
+    all_repos = [RepoMetadata.model_validate(doc) for doc in crawl_stats.get_repos()]
+    time_elapsed = time.perf_counter() - start
+
+    logger.info(f'Retrieved repos in {time_elapsed:.2f} seconds')
+
+    return all_repos
 
 
 @app.post("/chat/", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
-async def chat_with_repo(request: RequestData, client: OptimizedAsyncClient = Depends(get_client)):
+async def chat_with_repo(
+        request: RequestData,
+        client: OptimizedAsyncClient = Depends(get_http_client)
+) -> StreamingResponse:
     """Endpoint for chatting with your repo.
 
     Get the user's search string, build the context, format the prompt and issue the assistant call.
@@ -60,10 +91,6 @@ async def chat_with_repo(request: RequestData, client: OptimizedAsyncClient = De
         rag_payload = await answer_query(request.last_message(), request.history(), client)
         rag_time_elapsed = time.perf_counter() - start
         logger.info(f'Got context in {rag_time_elapsed:.2f}s, {len(rag_payload.formatted)} tokens')
-
-        # print('*'*100)
-        # print(rag_payload.formatted)
-        # print('*' * 100)
 
         # Wait for the first response chunk. This helps with profiling, exposing real runtime.
         first_chunk_start = time.perf_counter()
