@@ -32,15 +32,14 @@ class CrawlStats:
         result = collection.insert_one(stats)
         return result.inserted_id
 
-    def get_last_commit(self, repo):
-        """Get the timestamp of the last commit to a repository.
+    def get_repo_stats(self, repo):
+        """Get the repo crawl stats.
 
         Args:
             repo (str): The name of the repository.
 
         Returns:
-            int: The timestamp of the last commit made to the repository.
-            If no commit exists, it returns 0.
+            If repo stats exist, return a RepoMetadata.
         """
         repo_crawl_stats = self.collection.find_one(
             {'_id': repo},

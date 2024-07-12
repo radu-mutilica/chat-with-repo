@@ -164,7 +164,7 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
         target_collection = config['target_collection']
         will_crawl = False  # assume we don't need to crawl
 
-        repo_metadata = await get_repo_metadata(config['url'], config['branch'], client)
+        fresh_metadata = await get_repo_metadata(config['url'], config['branch'], client)
 
         if target_collection not in all_collections:
             # If no collection present, then just go ahead and crawl
@@ -175,13 +175,14 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
             # If collection exists, check the latest commit timestamp
             logger.info(f'Collection present target={target_collection}. Checking last commit...')
 
-            last_crawled_commit_ts = stats.get_last_commit(subnet)
-            if last_crawled_commit_ts < repo_metadata.branch.last_commit_ts:
-                logger.info(f'Stale last commit ts={last_crawled_commit_ts} target={subnet}, '
-                            f'new one {repo_metadata}. Crawling...')
+            last_crawl_stats = stats.get_repo_stats(subnet)
+            if last_crawl_stats.branch.last_commit_ts < fresh_metadata.branch.last_commit_ts:
+                logger.info(f'Stale last commit ts={last_crawl_stats.branch} target={subnet}, '
+                            f'new one {fresh_metadata.branch}. Crawling...')
                 will_crawl = True
             else:
-                logger.info(f'Skipping target={target_collection}. Last commit @ {repo_metadata}')
+                logger.info(f'Skipping target={target_collection}. '
+                            f'Last commit @ {fresh_metadata.branch}')
 
         if will_crawl:
             try:
@@ -189,4 +190,4 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
             except Exception:
                 logger.exception(f'Failed to crawl target={target_collection}:')
             else:
-                stats.update_crawl_stats(subnet, repo_metadata)
+                stats.update_crawl_stats(subnet, fresh_metadata)
