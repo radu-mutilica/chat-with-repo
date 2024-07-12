@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, AsyncGenerator, Any
 
 from langchain_core.documents import Document
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, AnyUrl
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,27 @@ class Repo(BaseModel):
     documents: List
     tree: str
     summary: Dict = {}
+
+
+class RepoOwner(BaseModel):
+    id: int
+    login: str
+    avatar_url: str
+
+
+class RepoBranch(BaseModel):
+    name: str
+    last_commit_ts: int
+
+
+class RepoMetadata(BaseModel):
+    added_ts: int | None = None  # todo: fix this
+    github_id: int
+    name: str
+    full_name: str
+    description: str | None = None  # this might be None
+    owner: RepoOwner
+    branch: RepoBranch
 
 
 class EmbeddingUsage(BaseModel):

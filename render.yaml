@@ -40,6 +40,16 @@ services:
           name: redis
           type: redis
           property: connectionString
+      - key: MONGO_HOST
+        fromService:
+          name: mongodb
+          type: pserv
+          property: host
+      - key: MONGO_PORT
+        fromService:
+          name: mongodb
+          type: pserv
+          property: port
       - key: CHROMA_HOST
         fromService:
           name: chroma

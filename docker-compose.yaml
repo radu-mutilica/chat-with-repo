@@ -27,9 +27,12 @@ services:
       HF_API_KEY: "${HF_API_KEY}"
       LOG_LEVEL: "INFO"
       PROFILING_ENABLED: "TRUE"
+      MONGO_HOST: "mongodb"
+      MONGO_PORT: "27017"
     depends_on:
       - chromadb
       - redis
+      - mongodb
     networks:
       - net
     profiles: ['apis']
@@ -107,7 +110,7 @@ services:
       - net
     volumes:
       - crawl_stats_data:/data/db
-    profiles: [ 'crawler']
+    profiles: [ 'crawler', 'apis']
 
   evaluation:
     build:
