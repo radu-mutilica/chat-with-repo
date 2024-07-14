@@ -176,9 +176,9 @@ async def check_if_crawl_needed(
         else:
             # If collection exists, check the latest commit timestamp
             logger.info(f'Collection found, target={crawl.target_collection}. Checking last commit')
-            last_crawl_run = stats.get_repo_stats(crawl.repo_id)
 
             try:
+                last_crawl_run = stats.get_repo_stats(crawl.repo_id)
                 if last_crawl_run.branch.last_commit_ts < fresh_metadata.branch.last_commit_ts:
                     logger.info(f'Stale last commit ts={last_crawl_run.branch} target={crawl.repo_id}, '
                                 f'new one {fresh_metadata.branch}. Crawling...')
