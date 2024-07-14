@@ -29,6 +29,7 @@ class RepoBranch(BaseModel):
 
 class RepoCrawlStats(BaseModel):
     repo_id: str  # internal database id
+    tag: str
     added_ts: int | None = None  # todo: fix this
     github_id: int
     name: str
