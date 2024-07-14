@@ -191,7 +191,7 @@ async def check_if_crawl_needed(
                 logger.error('Missing stats for target={crawl.target_collection}. Crawling...')
                 will_crawl = True
 
-        if will_crawl:
+        if will_crawl or os.getenv('FORCE_CRAWL') == 'TRUE':
             try:
                 yield crawl
             except Exception:

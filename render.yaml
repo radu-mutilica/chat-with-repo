@@ -8,9 +8,9 @@ services:
     plan: standard
     envVars:
       - key: ANONYMIZED_TELEMETRY
-        value: FALSE
+        value: "FALSE"
       - key: IS_PERSISTENT
-        value: TRUE
+        value: "TRUE"
       - key: PERSIST_DIRECTORY
         value: /chromadb
       - fromGroup: veggie-scout-envs
@@ -79,6 +79,8 @@ services:
     envVars:
       - key: LOG_LEVEL
         value: INFO
+      - key: FORCE_CRAWL
+        value: "FALSE"
       - key: GITHUB_API_KEY
         sync: false
       - key: CHROMA_HOST
