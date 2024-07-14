@@ -2,7 +2,7 @@ import os
 
 from pymongo import MongoClient
 
-from libs.models import RepoMetadata
+from libs.models import RepoCrawlStats
 
 mongo_connection_string = f'mongodb://{os.environ["MONGO_HOST"]}:{os.environ["MONGO_PORT"]}/stats'
 
@@ -46,11 +46,11 @@ class CrawlStats:
         )
 
         if repo_crawl_stats:
-            return RepoMetadata.model_validate(repo_crawl_stats)
+            return RepoCrawlStats.model_validate(repo_crawl_stats)
         else:
             return None
 
-    def update_crawl_stats(self, repo, metadata):
+    def update_crawl_stats(self, repo_id, metadata):
         """Update the stats for this repository.
 
         Repo name.
@@ -61,20 +61,25 @@ class CrawlStats:
         A unique id for that repo.
 
         Args:
-            repo (str): The name or identifier of the repository.
-            metadata (RepoMetadata): the metadata info for this repo/branch combo.
+            repo_id (str): The name or identifier of the repository.
+            metadata (RepoCrawlStats): the metadata info for this repo/branch combo.
 
         """
+        metadata = metadata.model_dump()
+
+        # todo: might wanna refactor this somehow. not keen on littering with random assignments
+        metadata['repo_id'] = repo_id
+
         self.collection.update_one(
             {
-                '_id': repo
+                '_id': repo_id
             },
             {
-                '$set': metadata.model_dump()
+                '$set': metadata
             },
             upsert=True
         )
 
     def get_repos(self):
         """Get the list of repositories, together will their crawl stats"""
-        return self.collection.find()
+        return [RepoCrawlStats.model_validate(doc) for doc in self.collection.find()]

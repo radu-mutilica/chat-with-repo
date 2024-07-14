@@ -1,27 +1,32 @@
+from libs.models import RepoCrawlTarget
+
 # If you add a subnet here it will get crawled
 #   'url': github url e.g. 'https://github.com/corcel-api/cortex.t',
 #   'branch': e.g. 'main',
 #   'name': human readable name e.g. 'cortex.t',
 #   'target_collection': name of vector db collection, e.g. 'subnet18'
 
-crawl_targets = {
+_crawl_targets = {
     'subnet-18': {
         'url': 'https://github.com/corcel-api/cortex.t',
         'branch': 'main',
         'name': 'cortex.t',
-        'target_collection': 'subnet18'
+        'target_collection': 'subnet18',
+        'tag': 'subnet-18: platform for AI development and synthetic data generation'
     },
     'subnet-19': {
         'url': 'https://github.com/namoray/vision',
         'branch': 'main',
         'name': 'vision',
-        'target_collection': 'subnet19'
+        'target_collection': 'subnet19',
+        'tag': 'subnet-19: decentralised inference of AI models'
     },
     'myself': {
         'url': 'https://github.com/radu-mutilica/chat-with-repo',
         'branch': 'master',
         'name': 'chat-with-repo',
-        'target_collection': 'myself'
+        'target_collection': 'myself',
+        'tag': 'AI chatbot for talking to GitHub repositories'
     }
     # 'subnet-1': 'https://github.com/macrocosm-os/prompting',
     # 'subnet-4': 'https://github.com/manifold-inc/targon',
@@ -57,3 +62,25 @@ crawl_targets = {
     # subnet-35'
     # 'subnet-36': 'https://github.com/HIP-Labs/HIP-Subnet'
 }
+
+
+def validate_crawl_targets(targets):
+    """Load and validate the list of crawl targets.
+
+    Args:
+        targets (dict): A dictionary containing crawl targets information. The keys are the
+        repository IDs and the values are the details of each repo.
+
+    Returns:
+        list: A list of validated crawl targets.
+    """
+    validated_targets = []
+
+    for repo_id, details in targets.items():
+        details['repo_id'] = repo_id
+        validated_targets.append(RepoCrawlTarget.model_validate(details))
+
+    return validated_targets
+
+
+crawl_targets = validate_crawl_targets(_crawl_targets)

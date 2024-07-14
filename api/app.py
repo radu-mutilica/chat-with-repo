@@ -11,7 +11,7 @@ from fastapi_limiter.depends import RateLimiter
 from starlette.responses import StreamingResponse
 
 from libs.http import OptimizedAsyncClient
-from libs.models import RequestData, RepoMetadata
+from libs.models import RequestData, RepoCrawlStats
 from libs.rag import answer_query
 from libs.stats import CrawlStats
 from libs.utils import register_profiling_middleware, async_chain
@@ -54,19 +54,20 @@ async def get_stats_client():
 @app.get("/repos/", dependencies=[Depends(RateLimiter(times=60, seconds=60))])
 async def repos(
         crawl_stats: CrawlStats = Depends(get_stats_client)
-) -> List[RepoMetadata]:
+) -> List[RepoCrawlStats]:
     """Fetch a list of crawled repos from the crawl stats database.
 
     Args:
         crawl_stats: The CrawlStats object used to get repository information.
 
     Returns:
-        List[RepoMetadata]: A list of RepoMetadata objects representing the retrieved repositories.
+        List[RepoCrawlStats]: A list of RepoMetadata objects representing the retrieved repositories.
     """
     start = time.perf_counter()
-    all_repos = [RepoMetadata.model_validate(doc) for doc in crawl_stats.get_repos()]
-    time_elapsed = time.perf_counter() - start
 
+    all_repos = crawl_stats.get_repos()
+
+    time_elapsed = time.perf_counter() - start
     logger.info(f'Retrieved repos in {time_elapsed:.2f} seconds')
 
     return all_repos
@@ -88,7 +89,7 @@ async def chat_with_repo(
     try:
         start = time.perf_counter()
 
-        rag_payload = await answer_query(request.last_message(), request.history(), client)
+        rag_payload = await answer_query(request.last_message, request.history, client)
         rag_time_elapsed = time.perf_counter() - start
         logger.info(f'Got context in {rag_time_elapsed:.2f}s, {len(rag_payload.formatted)} tokens')
 

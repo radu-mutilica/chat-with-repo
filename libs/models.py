@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, AsyncGenerator, Any
 
 from langchain_core.documents import Document
-from pydantic import BaseModel, ConfigDict, AnyUrl
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,8 @@ class RepoBranch(BaseModel):
     last_commit_ts: int
 
 
-class RepoMetadata(BaseModel):
+class RepoCrawlStats(BaseModel):
+    repo_id: str  # internal database id
     added_ts: int | None = None  # todo: fix this
     github_id: int
     name: str
@@ -35,6 +36,15 @@ class RepoMetadata(BaseModel):
     description: str | None = None  # this might be None
     owner: RepoOwner
     branch: RepoBranch
+
+
+class RepoCrawlTarget(BaseModel):
+    repo_id: str
+    url: str
+    branch: str
+    name: str
+    target_collection: str
+    tag: str
 
 
 class EmbeddingUsage(BaseModel):
@@ -138,9 +148,11 @@ class RequestData(BaseModel):
     model: str = 'model_name'
     messages: List[Message]
 
+    @property
     def history(self):
         return self.messages[:-1]
 
+    @property
     def last_message(self):
         return self.messages[-1]
 

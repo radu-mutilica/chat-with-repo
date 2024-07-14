@@ -1,7 +1,7 @@
 import logging
 import os
 from datetime import datetime
-from typing import AsyncGenerator
+from typing import AsyncGenerator, List
 from urllib.parse import urlparse
 
 import httpx
@@ -9,7 +9,7 @@ from directory_tree import display_tree
 from langchain_community.document_loaders import GitLoader
 
 import libs.stats
-from libs.models import Repo, RepoMetadata
+from libs.models import Repo, RepoCrawlStats, RepoCrawlTarget
 from libs.storage import vector_db
 
 logger = logging.getLogger(__name__)
@@ -62,17 +62,15 @@ async def load_repo(url: str, branch, temp_path: str) -> Repo:
 
 
 async def get_repo_metadata(
-        url: str,
-        branch: str,
+        crawl: RepoCrawlTarget,
         client: httpx.AsyncClient
-) -> RepoMetadata:
+) -> RepoCrawlStats:
     """Query GitHub API to get detailed information about a specific repo/branch combo.
 
     Will do two separate requests, one for the general repo, one for the specific branch.
 
     Args:
-        url: A string representing the URL of the repository.
-        branch: A string representing the branch of the repository.
+        crawl (RepoCrawlTarget): the details of the repo/branch combo to crawl (like url, branch)
         client: An instance of the `httpx.AsyncClient` class used for making asynchronous
         HTTP requests.
 
@@ -80,20 +78,23 @@ async def get_repo_metadata(
         An instance of the `RepoMetadata` model containing the metadata of the repository.
 
     """
-    repo_parts = url.rstrip('/').split('/')
+    repo_parts = crawl.url.rstrip('/').split('/')
 
     owner = repo_parts[-2]
     repo = repo_parts[-1]
 
     data = await _get_repo_information(owner, repo, client)
-    last_commit_ts = await get_last_commit_ts(owner, repo, branch, client)
+    last_commit_ts = await get_last_commit_ts(owner, repo, crawl.branch, client)
 
     data['branch'] = {
-        'name': branch,
+        'name': crawl.branch,
         'last_commit_ts': last_commit_ts,
     }
     data['github_id'] = data.pop('id')
-    metadata = RepoMetadata.model_validate(data)
+    data['tag'] = crawl.tag
+    data['repo_id'] = crawl.repo_id
+
+    metadata = RepoCrawlStats.model_validate(data)
 
     return metadata
 
@@ -139,7 +140,10 @@ async def get_last_commit_ts(
     return last_commit.timestamp()
 
 
-async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGenerator:
+async def check_if_crawl_needed(
+        crawl_targets: List[RepoCrawlTarget],
+        client: httpx.AsyncClient
+) -> AsyncGenerator:
     """We don't want to crawl every repo on every cronjob, so check for new commits first.
 
     This method checks if a crawl is needed for each target in the provided dictionary. It
@@ -147,8 +151,7 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
     commit timestamps. If a crawl is needed, it yields the subnet and crawl configuration.
 
     Args:
-        targets: A dictionary representing the targets to be crawled. The keys are the subnets and
-        the values are the crawl configurations.
+        crawl_targets: (List[RepoCrawlTarget]) A list with the targets to be crawled.
         client: An httpx.AsyncClient instance used for making asynchronous HTTP requests.
 
     Returns:
@@ -160,34 +163,33 @@ async def check_if_crawl_needed(targets, client: httpx.AsyncClient) -> AsyncGene
     all_collections = [c.name for c in vector_db.list_collections()]
     logger.info(f'All collections: {all_collections}')
 
-    for subnet, config in targets.items():
-        target_collection = config['target_collection']
+    for crawl in crawl_targets:
         will_crawl = False  # assume we don't need to crawl
 
-        fresh_metadata = await get_repo_metadata(config['url'], config['branch'], client)
+        fresh_metadata = await get_repo_metadata(crawl, client)
 
-        if target_collection not in all_collections:
+        if crawl.target_collection not in all_collections:
             # If no collection present, then just go ahead and crawl
-            logger.info(f'Collection missing target={target_collection}. Crawling...')
+            logger.info(f'Collection missing target={crawl.target_collection}. Crawling...')
             will_crawl = True
 
         else:
             # If collection exists, check the latest commit timestamp
-            logger.info(f'Collection present target={target_collection}. Checking last commit...')
+            logger.info(f'Collection found, target={crawl.target_collection}. Checking last commit')
+            last_crawl_run = stats.get_repo_stats(crawl.repo_id)
 
-            last_crawl_stats = stats.get_repo_stats(subnet)
-            if last_crawl_stats.branch.last_commit_ts < fresh_metadata.branch.last_commit_ts:
-                logger.info(f'Stale last commit ts={last_crawl_stats.branch} target={subnet}, '
+            if last_crawl_run.branch.last_commit_ts < fresh_metadata.branch.last_commit_ts:
+                logger.info(f'Stale last commit ts={last_crawl_run.branch} target={crawl.repo_id}, '
                             f'new one {fresh_metadata.branch}. Crawling...')
                 will_crawl = True
             else:
-                logger.info(f'Skipping target={target_collection}. '
-                            f'Last commit @ {fresh_metadata.branch}')
+                logger.info(f'Skipping target={crawl.target_collection}. Last commit @ '
+                            f'{fresh_metadata.branch}')
 
         if will_crawl:
             try:
-                yield subnet, config
+                yield crawl
             except Exception:
-                logger.exception(f'Failed to crawl target={target_collection}:')
+                logger.exception(f'Failed to crawl target={crawl}:')
             else:
-                stats.update_crawl_stats(subnet, fresh_metadata)
+                stats.update_crawl_stats(crawl.repo_id, fresh_metadata)
