@@ -7,6 +7,11 @@ from libs.models import RepoCrawlStats
 mongo_connection_string = f'mongodb://{os.environ["MONGO_HOST"]}:{os.environ["MONGO_PORT"]}/stats'
 
 
+class NoStatsFound(Exception):
+    """Raised when no stats are found in the statistics database. This can happen when we have
+    vector data, but missing history of a run"""
+
+
 class CrawlStats:
     """
     A class for ORM bindings for crawl statistics and operations.
@@ -48,7 +53,7 @@ class CrawlStats:
         if repo_crawl_stats:
             return RepoCrawlStats.model_validate(repo_crawl_stats)
         else:
-            return None
+            raise NoStatsFound()
 
     def update_crawl_stats(self, repo_id, metadata):
         """Update the stats for this repository.
